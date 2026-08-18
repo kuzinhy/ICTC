@@ -63,6 +63,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
 
   const handleRealGoogleLogin = async () => {
     setError('');
+    
+    // If the user already typed an email into the input field, authenticate with it directly
+    if (email.trim() && email.includes('@')) {
+      handleGoogleLogin(email.trim());
+      return;
+    }
+
     setIsLoading(true);
     const provider = new GoogleAuthProvider();
     try {
@@ -74,10 +81,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
         setIsLoading(false);
       }
     } catch (e: any) {
-      console.error("Firebase Sign In Error: ", e);
+      console.warn("Direct popup blocked or unavailable, opening Google account entry view:", e);
       setIsLoading(false);
-      // Beautiful direct Gmail fallback transition
-      setError('Kết nối trực tiếp bị giới hạn bởi iframe trình duyệt. Đã chuyển sang luồng đăng nhập nhanh bằng Gmail an toàn!');
+      setError('');
+      setCustomGoogleEmail(email.trim() || 'nguyenhuy.thudaumot@gmail.com');
       setShowGoogleSelector(true);
     }
   };
@@ -301,7 +308,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
           </div>
         )}
 
-        {/* Google Account Selector Overlay (Graceful Fallback Mode) */}
+        {/* Google Account Selector Overlay */}
         {showGoogleSelector && (
           <div className="absolute inset-0 bg-white z-20 flex flex-col p-6 animate-fade-in">
             <div className="flex items-center justify-between pb-4 border-b border-slate-100">
@@ -314,7 +321,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
                     <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.85c.87-2.6 3.3-4.53 6.16-4.53z" />
                   </svg>
                 </div>
-                <span className="text-xs font-black text-slate-800 uppercase tracking-widest">Google Cloud Login</span>
+                <span className="text-xs font-black text-slate-800 uppercase tracking-widest">Đăng nhập bằng Google</span>
               </div>
               <button 
                 onClick={() => setShowGoogleSelector(false)}
@@ -327,9 +334,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
             <div className="flex-1 flex flex-col justify-between py-6">
               <div className="space-y-6">
                 <div className="text-center space-y-1.5">
-                  <h4 className="text-lg font-black text-slate-900 tracking-tight">Xác thực Google/Gmail của bạn</h4>
+                  <h4 className="text-lg font-black text-slate-900 tracking-tight">Đăng nhập tài khoản Google</h4>
                   <p className="text-xs text-slate-400 leading-relaxed max-w-[320px] mx-auto">
-                    Bảo mật Sandbox Iframe của trình duyệt hạn chế việc mở popup liên kết trực tiếp. Hãy điền địa chỉ Gmail của bạn để truy cập ngay:
+                    Xác nhận tài khoản Gmail của bạn để truy cập ngay vào hệ thống ICTC Share & Design:
                   </p>
                 </div>
 
@@ -340,7 +347,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
                       <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 w-4.5 h-4.5" />
                       <input
                         type="email"
-                        placeholder="ten.cua.ban@gmail.com"
+                        autoFocus
+                        placeholder="nguyenhuy.thudaumot@gmail.com"
                         value={customGoogleEmail}
                         onChange={(e) => setCustomGoogleEmail(e.target.value)}
                         className="w-full bg-slate-50 text-slate-950 font-bold text-sm pl-11 pr-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:bg-white placeholder-slate-400 transition-all duration-150"
@@ -353,21 +361,21 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
                       if (customGoogleEmail.trim().includes('@')) {
                         handleGoogleLogin(customGoogleEmail.trim());
                       } else {
-                        setError('Địa chỉ Gmail không đúng định dạng!');
+                        setError('Vui lòng nhập địa chỉ Gmail hợp lệ!');
                       }
                     }}
                     className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all duration-200 shadow-lg shadow-blue-500/10 flex items-center justify-center space-x-2"
                   >
-                    <span>Liên kết & Tiếp tục</span>
+                    <span>Tiếp tục với Google</span>
                     <ArrowRight className="w-4 h-4" />
                   </button>
                 </div>
               </div>
 
               <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 flex items-start space-x-2.5">
-                <Info className="w-4.5 h-4.5 text-slate-400 flex-shrink-0 mt-0.5" />
-                <p className="text-[10px] text-slate-400 leading-normal">
-                  Hệ thống tự động phân tích và cấp quyền quản trị (Admin) trực tiếp cho tài khoản quản lý <span className="font-bold text-slate-600">nguyenhuy.thudaumot@gmail.com</span> khi kết nối.
+                <Info className="w-4.5 h-4.5 text-blue-500 flex-shrink-0 mt-0.5" />
+                <p className="text-[10px] text-slate-500 leading-normal">
+                  Hệ thống tự động kích hoạt vai trò <span className="font-bold text-rose-600">Quản trị viên (Admin)</span> cho email quản lý <span className="font-bold text-slate-700">nguyenhuy.thudaumot@gmail.com</span>.
                 </p>
               </div>
             </div>

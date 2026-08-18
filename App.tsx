@@ -38,6 +38,16 @@ const App: React.FC = () => {
     const savedUsers = localStorage.getItem('ictc_registered_users');
     if (!savedUsers) {
       localStorage.setItem('ictc_registered_users', JSON.stringify(INITIAL_USERS));
+    } else {
+      try {
+        let parsed: User[] = JSON.parse(savedUsers);
+        // Purge legacy auto-added mock accounts
+        parsed = parsed.filter(u => !['admin@ictc.io.vn', 'huy.design@ictc.io.vn', 'member@ictc.io.vn'].includes(u.email.toLowerCase()));
+        if (parsed.length === 0) {
+          parsed = INITIAL_USERS;
+        }
+        localStorage.setItem('ictc_registered_users', JSON.stringify(parsed));
+      } catch (e) {}
     }
 
     const savedDesigns = localStorage.getItem('ictc_design_files');

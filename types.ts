@@ -20,8 +20,12 @@ export interface User {
   email: string;
   displayName: string;
   role: 'Admin' | 'Creator' | 'Member';
+  status?: 'Active' | 'Pending' | 'Suspended';
   avatarUrl: string;
   joinedDate: string;
+  department?: string;
+  phoneNumber?: string;
+  bio?: string;
 }
 
 export interface DesignFile {

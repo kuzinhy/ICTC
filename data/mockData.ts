@@ -5,28 +5,15 @@ export const DRIVE_PROMPT_FOLDER = 'https://drive.google.com/drive/folders/1yWbu
 
 export const INITIAL_USERS: User[] = [
   {
-    id: 'usr-admin',
-    email: 'admin@ictc.io.vn',
-    displayName: 'Nguyễn Huy (Admin)',
+    id: 'usr-admin-primary',
+    email: 'nguyenhuy.thudaumot@gmail.com',
+    displayName: 'Nguyễn Huy',
     role: 'Admin',
-    avatarUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80',
-    joinedDate: '2026-01-01'
-  },
-  {
-    id: 'usr-creator',
-    email: 'huy.design@ictc.io.vn',
-    displayName: 'Huy Designer',
-    role: 'Creator',
-    avatarUrl: 'https://images.unsplash.com/photo-1519345182560-3f2917c472ef?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80',
-    joinedDate: '2026-03-15'
-  },
-  {
-    id: 'usr-member',
-    email: 'member@ictc.io.vn',
-    displayName: 'Minh Thảo',
-    role: 'Member',
-    avatarUrl: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80',
-    joinedDate: '2026-05-10'
+    status: 'Active',
+    avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=256&h=256&q=80',
+    joinedDate: '2026-01-01',
+    department: 'Ban Quản Trị Hệ Thống',
+    bio: 'Quản trị viên trưởng hệ thống ICTC Share & Design'
   }
 ];
 

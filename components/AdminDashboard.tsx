@@ -4,8 +4,9 @@ import {
   Check, X, ToggleLeft, ToggleRight, Save, Database, Sparkles, Folder, Code
 } from 'lucide-react';
 import { User, DesignFile, AIPrompt, SystemConfig } from '../types';
-import { DEFAULT_SYSTEM_CONFIG } from '../data/mockData';
+import { DEFAULT_SYSTEM_CONFIG, INITIAL_USERS } from '../data/mockData';
 import { DriveUploadResearch } from './DriveUploadResearch';
+import { MemberManagement } from './MemberManagement';
 
 interface AdminDashboardProps {
   currentUser: User;
@@ -27,16 +28,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
     // 1. Users list
     const savedUsers = localStorage.getItem('ictc_registered_users');
     if (savedUsers) {
-      try { setUserList(JSON.parse(savedUsers)); } catch (e) { setUserList([]); }
+      try {
+        let parsed: User[] = JSON.parse(savedUsers);
+        // Purge legacy auto-added mock emails
+        parsed = parsed.filter(u => !['admin@ictc.io.vn', 'huy.design@ictc.io.vn', 'member@ictc.io.vn'].includes(u.email.toLowerCase()));
+        if (parsed.length === 0) {
+          parsed = INITIAL_USERS;
+        }
+        setUserList(parsed);
+      } catch (e) {
+        setUserList(INITIAL_USERS);
+      }
     } else {
-      // Seed initial users if empty
-      const initialUsers = [
-        { id: 'usr-admin', email: 'admin@ictc.io.vn', displayName: 'Nguyễn Huy (Admin)', role: 'Admin' as const, avatarUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80', joinedDate: '2026-01-01' },
-        { id: 'usr-creator', email: 'huy.design@ictc.io.vn', displayName: 'Huy Designer', role: 'Creator' as const, avatarUrl: 'https://images.unsplash.com/photo-1519345182560-3f2917c472ef?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80', joinedDate: '2026-03-15' },
-        { id: 'usr-member', email: 'member@ictc.io.vn', displayName: 'Minh Thảo', role: 'Member' as const, avatarUrl: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80', joinedDate: '2026-05-10' }
-      ];
-      setUserList(initialUsers);
-      localStorage.setItem('ictc_registered_users', JSON.stringify(initialUsers));
+      setUserList(INITIAL_USERS);
+      localStorage.setItem('ictc_registered_users', JSON.stringify(INITIAL_USERS));
     }
 
     // 2. Pending Content
@@ -64,18 +69,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
       localStorage.setItem('ictc_system_config', JSON.stringify(DEFAULT_SYSTEM_CONFIG));
     }
   }, [activeSubTab]);
-
-  // Handle User Promotion/Demotion
-  const handleRoleChange = (userId: string, newRole: 'Admin' | 'Creator' | 'Member') => {
-    const updated = userList.map(u => {
-      if (u.id === userId) {
-        return { ...u, role: newRole };
-      }
-      return u;
-    });
-    setUserList(updated);
-    localStorage.setItem('ictc_registered_users', JSON.stringify(updated));
-  };
 
   // Handle Content Approval
   const handleApproveContent = (id: string, type: 'design' | 'prompt') => {
@@ -193,68 +186,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
         
         {/* TAB 1: USER MANAGEMENT */}
         {activeSubTab === 'users' && (
-          <div className="space-y-6">
-            <h3 className="text-base font-bold text-slate-900">Quản lý thành viên & phân quyền</h3>
-            <div className="overflow-x-auto rounded-xl border border-slate-100">
-              <table className="w-full text-left border-collapse text-sm">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 font-bold text-xs uppercase tracking-wider">
-                    <th className="p-4">Họ và tên</th>
-                    <th className="p-4">Email</th>
-                    <th className="p-4">Ngày gia nhập</th>
-                    <th className="p-4">Vai trò (Role)</th>
-                    <th className="p-4 text-center">Hành động</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {userList.map((user) => (
-                    <tr key={user.id} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="p-4 flex items-center space-x-3 font-semibold text-slate-900">
-                        <img src={user.avatarUrl} alt={user.displayName} className="w-9 h-9 rounded-full border border-slate-200" />
-                        <span>{user.displayName}</span>
-                      </td>
-                      <td className="p-4 text-slate-600 font-mono text-xs">{user.email}</td>
-                      <td className="p-4 text-slate-500 font-semibold">{user.joinedDate}</td>
-                      <td className="p-4">
-                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                          user.role === 'Admin' ? 'bg-purple-100 text-purple-700' :
-                          user.role === 'Creator' ? 'bg-blue-100 text-blue-700' :
-                          'bg-slate-100 text-slate-700'
-                        }`}>
-                          {user.role}
-                        </span>
-                      </td>
-                      <td className="p-4 text-center">
-                        {user.id !== 'usr-admin' ? (
-                          <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 text-xs">
-                            <button
-                              onClick={() => handleRoleChange(user.id, 'Member')}
-                              className={`px-2 py-1 rounded-md font-bold transition-all ${user.role === 'Member' ? 'bg-slate-100 text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}
-                            >
-                              Member
-                            </button>
-                            <button
-                              onClick={() => handleRoleChange(user.id, 'Creator')}
-                              className={`px-2 py-1 rounded-md font-bold transition-all ${user.role === 'Creator' ? 'bg-blue-500 text-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-                            >
-                              Creator
-                            </button>
-                            <button
-                              onClick={() => handleRoleChange(user.id, 'Admin')}
-                              className={`px-2 py-1 rounded-md font-bold transition-all ${user.role === 'Admin' ? 'bg-purple-500 text-white shadow-sm' : 'text-slate-400 hover:text-slate-600'}`}
-                            >
-                              Admin
-                            </button>
-                          </div>
-                        ) : (
-                          <span className="text-xs font-semibold text-slate-400 italic">Tài khoản quản trị gốc</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+          <div className="animate-fade-in">
+            <MemberManagement 
+              currentUser={currentUser} 
+              users={userList} 
+              onUsersChange={(updated) => {
+                setUserList(updated);
+                localStorage.setItem('ictc_registered_users', JSON.stringify(updated));
+              }} 
+            />
           </div>
         )}
 

@@ -216,3 +216,13 @@ export async function saveUserToDb(user: User): Promise<void> {
     throw error;
   }
 }
+
+export async function deleteUserFromDb(userId: string): Promise<void> {
+  try {
+    const docRef = doc(db, 'users', userId);
+    await deleteDoc(docRef);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `users/${userId}`);
+    throw error;
+  }
+}
