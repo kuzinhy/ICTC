@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   X, Save, UploadCloud, Link as LinkIcon, FileText, Info,
-  Sparkles, Check, AlertCircle, ShieldAlert, Crown
+  Sparkles, Check, AlertCircle, ShieldAlert, Crown, Upload, HardDrive, FolderPlus, ExternalLink
 } from 'lucide-react';
 import { DesignFile, User } from '../types';
 import { scanContentSafety } from '../lib/contentModeration';
@@ -35,6 +35,98 @@ export const DesignEditorModal: React.FC<DesignEditorModalProps> = ({
   // Safety Scan states
   const [isScanning, setIsScanning] = useState(false);
   const [safetyNotice, setSafetyNotice] = useState<{ isSafe: boolean; keywords: string[] } | null>(null);
+
+  // Apps Script & Google Drive uploading states
+  const [googleAppsScriptUrl, setGoogleAppsScriptUrl] = useState('');
+  const [designFile, setDesignFile] = useState<File | null>(null);
+  const [designFileName, setDesignFileName] = useState('');
+  const [isUploadingToDrive, setIsUploadingToDrive] = useState(false);
+  const [driveUploadSuccess, setDriveUploadSuccess] = useState<string | null>(null);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    try {
+      const savedConfig = localStorage.getItem('ictc_system_config');
+      if (savedConfig) {
+        const parsed = JSON.parse(savedConfig);
+        if (parsed.googleAppsScriptUrl) {
+          setGoogleAppsScriptUrl(parsed.googleAppsScriptUrl);
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }, []);
+
+  const handleDesignFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setDesignFile(file);
+      setDesignFileName(file.name);
+      const sizeMb = (file.size / (1024 * 1024)).toFixed(2);
+      setFileSize(`${sizeMb} MB`);
+      
+      // Auto fill title if empty
+      if (!title) {
+        const cleanName = file.name.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ");
+        setTitle(cleanName);
+      }
+
+      // Auto detect file extension
+      const ext = file.name.split('.').pop()?.toUpperCase() || 'PPTX';
+      setFileType(ext);
+    }
+  };
+
+  const handleAutoUploadToDrive = () => {
+    if (!designFile) {
+      setError('Vui lòng chọn tệp thiết kế từ máy trước!');
+      return;
+    }
+    if (!googleAppsScriptUrl) {
+      setError('Hệ thống chưa cấu hình URL Apps Script. Vui lòng dán link thủ công.');
+      return;
+    }
+
+    setIsUploadingToDrive(true);
+    setError('');
+    setDriveUploadSuccess(null);
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const base64 = event.target?.result as string;
+        
+        await fetch(googleAppsScriptUrl, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: {
+            'Content-Type': 'text/plain',
+          },
+          body: JSON.stringify({
+            fileName: designFile.name,
+            mimeType: designFile.type || 'application/octet-stream',
+            fileData: base64,
+            contentType: 'design',
+            title: title || designFile.name,
+            contributor: currentUser.displayName || 'Admin ICTC',
+            email: currentUser.email,
+            description: description || 'Tệp thiết kế được tải lên trực tiếp'
+          })
+        });
+
+        const resultDriveUrl = `https://drive.google.com/drive/folders/1adp9EiA1GTNFSaq2g0cz8dJbr1YpDzFd`;
+        setDriveUrl(resultDriveUrl);
+        setDriveUploadSuccess('Tải lên hoàn tất! Tệp tin đã được chuyển thẳng tới thư mục Google Drive: /Thietke.');
+      } catch (err: any) {
+        console.error(err);
+        setError('Không thể kết nối đến máy chủ Google Drive. Vui lòng tải lên thủ công.');
+      } finally {
+        setIsUploadingToDrive(false);
+      }
+    };
+    reader.readAsDataURL(designFile);
+  };
 
   useEffect(() => {
     if (editingFile) {
@@ -70,8 +162,11 @@ export const DesignEditorModal: React.FC<DesignEditorModalProps> = ({
     setIsScanning(true);
     setSafetyNotice(null);
     setTimeout(() => {
-      const combinedText = `${title} ${description} ${tags}`;
-      const scanResult = scanContentSafety(combinedText);
+      const scanResult = scanContentSafety({ 
+        title, 
+        description, 
+        tags: tags.split(',').map(t => t.trim()) 
+      });
       setSafetyNotice(scanResult);
       setIsScanning(false);
     }, 600);
@@ -80,14 +175,17 @@ export const DesignEditorModal: React.FC<DesignEditorModalProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Double check with silent safety check
-    const combinedText = `${title} ${description} ${tags}`;
-    const scanResult = scanContentSafety(combinedText);
-
     const tagArray = tags
       .split(',')
       .map(t => t.trim())
       .filter(t => t.length > 0);
+
+    // Double check with silent safety check
+    const scanResult = scanContentSafety({ 
+      title, 
+      description, 
+      tags: tagArray 
+    });
 
     const fileData: DesignFile = {
       id: editingFile?.id || `design-${Date.now()}`,
@@ -106,7 +204,7 @@ export const DesignEditorModal: React.FC<DesignEditorModalProps> = ({
       authorId: editingFile?.authorId || currentUser.id,
       status: status,
       autoFlaggedViolation: !scanResult.isSafe,
-      violationReason: !scanResult.isSafe ? `Nội dung chứa từ khóa nhạy cảm bị gắn cờ: ${scanResult.keywords.join(', ')}` : undefined,
+      violationReason: !scanResult.isSafe ? `Nội dung chứa từ khóa nhạy cảm bị gắn cờ: ${scanResult.matchedKeywords.join(', ')}` : undefined,
       isVip: isVip,
     };
 
@@ -196,19 +294,143 @@ export const DesignEditorModal: React.FC<DesignEditorModalProps> = ({
             </div>
 
             {/* Google Drive URL */}
-            <div className="sm:col-span-2 space-y-1">
-              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center justify-between">
+            <div className="sm:col-span-2 space-y-1.5 pt-2">
+              <label className="text-[11px] font-black text-slate-800 uppercase tracking-wider flex items-center justify-between">
                 <span>Liên kết Google Drive tải file gốc</span>
-                <LinkIcon className="w-3 h-3 text-blue-500" />
+                <span className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded font-mono font-bold">Thư mục con: /Thietke</span>
               </label>
-              <input
-                type="url"
-                required
-                value={driveUrl}
-                onChange={(e) => setDriveUrl(e.target.value)}
-                placeholder="https://drive.google.com/file/d/... hoặc folder..."
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white"
-              />
+
+              <div className="border border-blue-100 rounded-2xl overflow-hidden bg-gradient-to-b from-blue-50/50 to-indigo-50/20 p-4 space-y-4">
+                
+                {/* Thư mục tiếp nhận chỉ định */}
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-white p-3.5 rounded-xl border border-slate-100 shadow-xs">
+                  <div className="space-y-0.5">
+                    <p className="font-bold text-slate-900 text-xs flex items-center space-x-1.5">
+                      <HardDrive className="w-4 h-4 text-blue-600" />
+                      <span>Thư mục chỉ định của Nguyễn Huy:</span>
+                    </p>
+                    <p className="text-slate-500 text-[11px] leading-relaxed">
+                      Vui lòng tải thiết kế của bạn lên thư mục con <strong className="text-blue-700 font-bold">/Thietke</strong> nằm trong thư mục dùng chung <strong className="text-slate-700">Tainguyenchiase</strong>.
+                    </p>
+                  </div>
+                  <a
+                    href="https://drive.google.com/drive/folders/1adp9EiA1GTNFSaq2g0cz8dJbr1YpDzFd"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center space-x-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-md shadow-blue-500/20 transition-all shrink-0 font-sans"
+                  >
+                    <FolderPlus className="w-4 h-4" />
+                    <span>Mở thư mục /Thietke</span>
+                    <ExternalLink className="w-3 h-3 opacity-80" />
+                  </a>
+                </div>
+
+                {/* Upload file simulation & Automatic upload */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <span className="block text-[10px] font-bold text-slate-500 uppercase">A. Chọn tệp thiết kế từ máy tính</span>
+                    <div className="p-4 border-2 border-dashed border-slate-300 hover:border-blue-500 rounded-xl text-center space-y-1.5 bg-white hover:bg-blue-50/20 transition-colors relative cursor-pointer">
+                      <input
+                        type="file"
+                        accept=".pptx,.ppt,.canva,.zip,.rar,.psd,.ai,.pdf"
+                        onChange={handleDesignFileChange}
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      />
+                      <Upload className="w-5 h-5 text-blue-600 mx-auto" />
+                      <div className="text-xs">
+                        {designFileName ? (
+                          <span className="font-bold text-blue-700 block truncate">{designFileName}</span>
+                        ) : (
+                          <span className="font-bold text-slate-800">Nhấp chọn tệp thiết kế (.pptx, .psd, .zip...)</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1 flex flex-col justify-between">
+                    <div>
+                      <span className="block text-[10px] font-bold text-slate-500 uppercase">B. Hoặc Nhập URL Tải về / Link Drive</span>
+                      <input
+                        type="url"
+                        required
+                        placeholder="https://drive.google.com/file/d/... hoặc link trực tiếp"
+                        value={driveUrl}
+                        onChange={(e) => setDriveUrl(e.target.value)}
+                        className="w-full bg-white text-slate-900 rounded-xl border border-slate-200 px-3.5 py-3 text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none placeholder:text-slate-400"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Automatic Upload via Google Apps Script (If configured) */}
+                {googleAppsScriptUrl ? (
+                  <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2 text-emerald-850">
+                        <Sparkles className="w-4 h-4 text-emerald-600 animate-pulse" />
+                        <span className="text-xs font-bold">Phát hiện Google Apps Script Web App của Nguyễn Huy</span>
+                      </div>
+                      <span className="text-[9px] bg-emerald-200/50 text-emerald-800 px-1.5 py-0.5 rounded font-bold uppercase">Sẵn sàng</span>
+                    </div>
+                    <p className="text-[10px] text-emerald-700 leading-snug">
+                      Bạn có thể tải tệp lên trực tiếp. Hệ thống sẽ tự động chuyển tệp vào thư mục con <strong className="font-black text-emerald-900">/Thietke</strong> của bạn ngay lập tức!
+                    </p>
+                    
+                    {designFile ? (
+                      <div className="pt-1 flex items-center justify-between gap-3">
+                        <div className="text-[10px] text-slate-500 truncate max-w-[60%]">
+                          Tệp đang chọn: <strong className="text-slate-700 font-bold">{designFileName}</strong>
+                        </div>
+                        <button
+                          type="button"
+                          disabled={isUploadingToDrive}
+                          onClick={handleAutoUploadToDrive}
+                          className={`px-4 py-1.5 rounded-xl font-bold text-xs text-white flex items-center space-x-1.5 transition-all ${
+                            isUploadingToDrive 
+                              ? 'bg-slate-400 cursor-not-allowed' 
+                              : 'bg-emerald-600 hover:bg-emerald-700 shadow-sm shadow-emerald-500/20'
+                          }`}
+                        >
+                          {isUploadingToDrive ? (
+                            <>
+                              <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                              <span>Đang chuyển lên Drive...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Upload className="w-3.5 h-3.5" />
+                              <span>Bắt đầu Upload tự động</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="text-[11px] text-slate-400 font-medium italic">
+                        * Hãy nhấp chọn tệp tin từ máy tính để bắt đầu quá trình tải lên tự động.
+                      </div>
+                    )}
+
+                    {driveUploadSuccess && (
+                      <div className="p-2 bg-emerald-100/50 border border-emerald-300 text-emerald-900 rounded-lg text-[11px] font-bold flex items-center space-x-1.5">
+                        <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span>{driveUploadSuccess}</span>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="p-3 bg-slate-100 rounded-xl text-[10px] text-slate-500 flex items-center space-x-2">
+                    <Info className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <span>Admin có thể cấu hình <strong>Google Apps Script URL</strong> trong cài đặt quản trị để bật chức năng upload 1-click tự động định tuyến.</span>
+                  </div>
+                )}
+
+                {error && (
+                  <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold rounded-xl flex items-center space-x-1.5">
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                    <span>{error}</span>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Preview Cover URL */}

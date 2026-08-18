@@ -89,6 +89,7 @@ export interface AIPrompt {
   autoFlaggedViolation?: boolean;
   violationReason?: string;
   isVip?: boolean;
+  driveUrl?: string;
 }
 
 export interface Article {
@@ -148,6 +149,7 @@ export interface SystemConfig {
   allowPublicUploads: boolean;
   maintenanceMode: boolean;
   defaultAIModel: string;
+  googleAppsScriptUrl?: string;
 }
 
 export type { VietnameseFont } from './data/vietnamFontsData';

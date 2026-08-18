@@ -700,17 +700,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
                     <div className="flex items-center justify-between text-[10px]">
                       <span className="font-bold text-slate-500">Độ mạnh mật khẩu:</span>
                       <span className={`font-black ${
-                        passwordStrength.strength === 'strong' ? 'text-emerald-600' :
-                        passwordStrength.strength === 'medium' ? 'text-amber-600' : 'text-rose-600'
+                        passwordStrength.score >= 80 ? 'text-emerald-600' :
+                        passwordStrength.score >= 40 ? 'text-amber-600' : 'text-rose-600'
                       }`}>
-                        {passwordStrength.feedback} ({passwordStrength.score}/100)
+                        {passwordStrength.label} ({passwordStrength.score}/100)
                       </span>
                     </div>
                     <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
                       <div
                         className={`h-full transition-all duration-300 ${
-                          passwordStrength.strength === 'strong' ? 'bg-emerald-500' :
-                          passwordStrength.strength === 'medium' ? 'bg-amber-500' : 'bg-rose-500'
+                          passwordStrength.score >= 80 ? 'bg-emerald-500' :
+                          passwordStrength.score >= 40 ? 'bg-amber-500' : 'bg-rose-500'
                         }`}
                         style={{ width: `${Math.max(passwordStrength.score, 10)}%` }}
                       />

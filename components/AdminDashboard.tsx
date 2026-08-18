@@ -1650,6 +1650,26 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
                 />
               </div>
 
+              {/* Google Apps Script Proxy Config */}
+              <div className="p-4 bg-emerald-50/50 border border-emerald-200 rounded-2xl space-y-3">
+                <div className="flex items-center space-x-2">
+                  <Code className="w-4 h-4 text-emerald-600" />
+                  <label className="text-xs font-black text-slate-900 uppercase tracking-wider">
+                    Google Apps Script Web App URL (Để Tải Tệp Tự Động Lên Drive)
+                  </label>
+                </div>
+                <input
+                  type="url"
+                  value={systemConfig.googleAppsScriptUrl || ''}
+                  onChange={(e) => setSystemConfig({ ...systemConfig, googleAppsScriptUrl: e.target.value })}
+                  className="w-full bg-white text-slate-700 font-mono text-xs rounded-xl border border-emerald-200 p-3 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  placeholder="https://script.google.com/macros/s/.../exec"
+                />
+                <p className="text-[11px] text-slate-500">
+                  Nhập URL Triển khai Ứng dụng Web từ Google Apps Script của bạn. Khi cấu hình URL này, thành viên có thể upload tệp trực tiếp và hệ thống sẽ tự động phân loại vào các thư mục con: <span className="font-bold text-emerald-700">/Font</span>, <span className="font-bold text-emerald-700">/Thietke</span>, hoặc <span className="font-bold text-emerald-700">/Promt mẫu</span>.
+                </p>
+              </div>
+
               {/* Toggles */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t border-slate-100">
                 <div className="flex items-center justify-between p-4 bg-slate-50 border border-slate-150 rounded-2xl">

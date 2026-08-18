@@ -3,7 +3,7 @@ import {
   Search, Download, Star, Tag, FileText, X, Edit, Trash2,
   UploadCloud, Check, ExternalLink, Calendar, User, Eye, Sparkles,
   Lock, Shield, ArrowRight, LogIn, Palette, Scale, ShieldCheck, Flag, AlertTriangle,
-  Crown
+  Crown, Clock
 } from 'lucide-react';
 import { DesignFile, User as UserType } from '../types';
 import { VipUpgradeModal } from './VipUpgradeModal';
@@ -183,7 +183,7 @@ export const DesignHub: React.FC<DesignHubProps> = ({ currentUser, onRequireAuth
           reason: `Phát hiện từ khóa nghi vấn (${safetyCheck.matchedKeywords.join(', ')})`,
           details: `Nội dung bị hệ thống tự động gắn cờ cảnh báo rủi ro ${safetyCheck.riskLevel.toUpperCase()}.`,
           reporterName: 'Hệ Thống Tự Động (Hidden Scanner)',
-          severity: safetyCheck.riskLevel === 'high' ? 'high' : 'medium',
+          severity: safetyCheck.riskLevel === 'severe' ? 'high' : 'medium',
           autoFlagged: true
         });
       }
@@ -419,7 +419,11 @@ export const DesignHub: React.FC<DesignHubProps> = ({ currentUser, onRequireAuth
               <div
                 key={file.id}
                 onClick={() => setSelectedFile(file)}
-                className="group bg-white border border-slate-200/80 rounded-3xl overflow-hidden cursor-pointer transform transition-all duration-300 hover:-translate-y-1 hover:border-blue-300 hover:shadow-lg flex flex-col justify-between"
+                className={`group rounded-3xl overflow-hidden cursor-pointer transform transition-all duration-300 hover:-translate-y-1 flex flex-col justify-between ${
+                  file.isVip 
+                    ? 'bg-white border-transparent ring-2 ring-amber-400/90 shadow-md shadow-amber-500/5 hover:shadow-xl hover:shadow-amber-500/10' 
+                    : 'bg-white border border-slate-200/80 hover:border-blue-300 hover:shadow-lg'
+                }`}
               >
                 <div>
                   {/* Thumbnail */}

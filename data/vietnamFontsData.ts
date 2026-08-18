@@ -20,8 +20,11 @@ export interface VietnameseFont {
   isGoogleFont?: boolean;
   isCustomUploaded?: boolean;
   isPinned?: boolean;
+  isVip?: boolean;
   fileSize?: string;
   createdAt?: string;
+  autoFlaggedViolation?: boolean;
+  violationReason?: string;
 }
 
 export interface GoogleResourceItem {
@@ -61,7 +64,8 @@ export const VIETNAMESE_FONTS_DATA: VietnameseFont[] = [
     downloadUrl: 'https://fonts.google.com/specimen/Be+Vietnam+Pro',
     tags: ['Google Fonts', 'Chuẩn tiếng Việt', 'Hiện đại', 'UI/UX', 'Chính quy'],
     isGoogleFont: true,
-    isPinned: true
+    isPinned: true,
+    isVip: true
   },
   {
     id: 'gf-plus-jakarta-sans',
@@ -120,7 +124,8 @@ export const VIETNAMESE_FONTS_DATA: VietnameseFont[] = [
     downloadUrl: 'https://fonts.google.com/specimen/Montserrat',
     tags: ['Google Fonts', 'Quốc dân', 'Đa năng', 'Canva', 'Photoshop'],
     isGoogleFont: true,
-    isPinned: true
+    isPinned: true,
+    isVip: true
   },
   {
     id: 'gf-roboto',

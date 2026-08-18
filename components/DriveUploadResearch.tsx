@@ -15,15 +15,30 @@ export const DriveUploadResearch: React.FC = () => {
   };
 
   const scriptCode = `/*
-  GOOGLE APPS SCRIPT: UPLOAD FILES DIRECTLY TO OWNER'S DRIVE
-  Hướng dẫn cài đặt:
-  1. Truy cập https://script.google.com và tạo dự án mới.
-  2. Dán đoạn mã này vào tệp script.
-  3. Thay thế 'FOLDER_ID_CUA_BAN' bằng ID thư mục Google Drive của bạn.
-  4. Nhấn "Triển khai" (Deploy) -> "Mới" (New deployment).
-  5. Chọn loại là "Ứng dụng web" (Web app).
-  6. Ở mục "Ai có quyền truy cập" (Who has access), chọn "Bất kỳ ai" (Anyone).
-  7. Copy URL Web App nhận được và dán vào phần cấu hình Admin của ICTC!
+  ==========================================================================
+  GOOGLE APPS SCRIPT: TỰ ĐỘNG PHÂN LOẠI FILE LÊN THƯ MỤC DRIVE CỦA NGUYỄN HUY
+  ==========================================================================
+  
+  Mục tiêu: Khi người dùng upload tệp tin từ hệ thống ICTC, Script này sẽ:
+  1. Nhận tệp tin dưới dạng mã hóa Base64.
+  2. Xác định loại nội dung: Font chữ, Thuyết kế (Slide), hay Prompt mẫu.
+  3. Tự động tìm hoặc tạo các thư mục con tương ứng bên trong "Tainguyenchiase" (ID: 1adp9EiA1GTNFSaq2g0cz8dJbr1YpDzFd).
+  4. Lưu tệp vào đúng thư mục:
+     - /Font (Cho Font chữ)
+     - /Thietke (Cho các file Powerpoint, Canva, thiết kế slide)
+     - /Promt mẫu (Cho câu lệnh AI đã được tối ưu)
+  5. Đính kèm mô tả chi tiết người đóng góp vào metadata của file.
+
+  Hướng dẫn cài đặt trên tài khoản nguyenhuy.thudaumot@gmail.com:
+  --------------------------------------------------------------
+  1. Truy cập https://script.google.com và nhấn "Dự án mới" (New project).
+  2. Xóa sạch mã cũ và dán toàn bộ đoạn code dưới đây vào.
+  3. Bạn có thể giữ nguyên ID thư mục gốc "1adp9EiA1GTNFSaq2g0cz8dJbr1YpDzFd" hoặc đổi nếu cần.
+  4. Nhấn biểu tượng Lưu (Save), sau đó nhấn nút "Triển khai" (Deploy) -> chọn "Triển khai mới" (New deployment).
+  5. Nhấp chọn loại cấu hình là "Ứng dụng web" (Web app).
+  6. Điền thông tin mô tả. Tại mục "Ai có quyền truy cập" (Who has access), CHỌN "Bất kỳ ai" (Anyone) - cực kỳ quan trọng!
+  7. Nhấn "Triển khai" (Deploy), cấp các quyền truy cập Google Drive khi được yêu cầu.
+  8. Sao chép "URL ứng dụng web" (Web app URL) và dán vào phần cấu hình Admin của website!
 */
 
 function doPost(e) {
@@ -33,24 +48,57 @@ function doPost(e) {
     var decoded = Utilities.base64Decode(base64Data);
     var blob = Utilities.newBlob(decoded, data.mimeType, data.fileName);
     
-    // ĐỊNH NGHĨA ID THƯ MỤC DRIVE CỦA BẠN TẠI ĐÂY
-    var folderId = "FOLDER_ID_CUA_BAN"; 
-    var folder = DriveApp.getFolderById(folderId);
-    var file = folder.createFile(blob);
+    // 1. Cấu hình ID thư mục gốc "Tainguyenchiase" của Nguyễn Huy
+    var rootFolderId = "1adp9EiA1GTNFSaq2g0cz8dJbr1YpDzFd"; 
+    var rootFolder = DriveApp.getFolderById(rootFolderId);
     
-    // Thêm mô tả và thông tin người đóng góp
-    file.setDescription("Người đóng góp: " + (data.contributor || "Ẩn danh") + "\\nEmail: " + (data.email || "Không rõ"));
+    // 2. Xác định tên thư mục con mục tiêu dựa trên loại tài nguyên gửi lên
+    var targetFolderName = "Thietke"; // Mặc định nếu không phân loại được
+    var contentType = data.contentType ? data.contentType.toLowerCase() : "design";
+    
+    if (contentType === "font") {
+      targetFolderName = "Font";
+    } else if (contentType === "prompt" || contentType === "promt") {
+      targetFolderName = "Promt mẫu";
+    } else if (contentType === "design" || contentType === "slide") {
+      targetFolderName = "Thietke";
+    }
+    
+    // 3. Tìm kiếm thư mục con, nếu chưa tồn tại thì tự động tạo mới dưới thư mục cha
+    var folders = rootFolder.getFoldersByName(targetFolderName);
+    var targetFolder;
+    if (folders.hasNext()) {
+      targetFolder = folders.next();
+    } else {
+      targetFolder = rootFolder.createFolder(targetFolderName);
+    }
+    
+    // 4. Tạo tệp tin mới và lưu vào thư mục con đã được định tuyến
+    var file = targetFolder.createFile(blob);
+    
+    // 5. Thêm mô tả thông tin metadata về người đóng góp phục vụ duyệt bài
+    var description = 
+      "=== THÔNG TIN ĐÓNG GÓP TÀI NGUYÊN ICTC ===\\n" +
+      "Tên tài nguyên: " + (data.title || data.fileName) + "\\n" +
+      "Người đóng góp: " + (data.contributor || "Thành viên cộng đồng") + "\\n" +
+      "Email liên hệ: " + (data.email || "Ẩn danh") + "\\n" +
+      "Mô tả tệp: " + (data.description || "Không có") + "\\n" +
+      "Thời gian: " + new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" });
+      
+    file.setDescription(description);
     
     return ContentService.createTextOutput(JSON.stringify({
       status: "success",
       fileUrl: file.getUrl(),
-      fileId: file.getId()
+      fileId: file.getId(),
+      folderName: targetFolderName,
+      message: "Tệp tin đã được định tuyến thành công vào thư mục /" + targetFolderName
     })).setMimeType(ContentService.MimeType.JSON);
     
   } catch (err) {
     return ContentService.createTextOutput(JSON.stringify({
       status: "error",
-      message: err.toString()
+      message: "Lỗi hệ thống: " + err.toString()
     })).setMimeType(ContentService.MimeType.JSON);
   }
 }`;

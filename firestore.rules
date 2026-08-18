@@ -138,6 +138,13 @@ service cloud.firestore {
       allow delete: if isAdmin() || (isSignedIn() && getExistingData().authorId == request.auth.uid);
     }
 
+    // Match rules for Fonts
+    match /fonts/{fontId} {
+      allow read: if true;
+      allow create, update: if isSignedIn();
+      allow delete: if isAdmin();
+    }
+
     // Match rules for system global config
     match /systemConfig/{docId} {
       allow read: if true;

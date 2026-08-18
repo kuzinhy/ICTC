@@ -28,7 +28,8 @@ export const DEFAULT_SYSTEM_CONFIG: SystemConfig = {
   autoApproveCreators: true,
   allowPublicUploads: true,
   maintenanceMode: false,
-  defaultAIModel: 'gemini-2.5-flash'
+  defaultAIModel: 'gemini-2.5-flash',
+  googleAppsScriptUrl: ''
 };
 
 export const INITIAL_DESIGN_FILES: DesignFile[] = [

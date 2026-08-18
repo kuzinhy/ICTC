@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { DesignHub } from './components/DesignHub';
 import { PromptHub } from './components/PromptHub';
 import { ArticleHub } from './components/ArticleHub';
@@ -370,11 +371,11 @@ const App: React.FC = () => {
           />
 
           {/* Primary View Tab Switcher */}
-          <div className="max-w-4xl mx-auto my-6">
-            <div className="bg-white p-1.5 rounded-2xl border border-slate-200/80 shadow-md flex flex-wrap sm:flex-nowrap gap-1">
+          <div className="max-w-6xl mx-auto my-6" id="primary-tab-switcher">
+            <div className="bg-white p-1.5 rounded-2xl border border-slate-200/80 shadow-md flex overflow-x-auto no-scrollbar gap-1 scroll-smooth">
               <button
                 onClick={() => setActiveTab('designs')}
-                className={`flex-1 flex items-center justify-center space-x-2 py-3 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 ${
+                className={`flex-1 flex items-center justify-center space-x-2 py-3 px-3.5 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 whitespace-nowrap shrink-0 sm:shrink ${
                   activeTab === 'designs'
                     ? 'bg-blue-600 text-white shadow-md shadow-blue-500/10'
                     : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
@@ -386,7 +387,7 @@ const App: React.FC = () => {
 
               <button
                 onClick={() => setActiveTab('prompts')}
-                className={`flex-1 flex items-center justify-center space-x-2 py-3 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 ${
+                className={`flex-1 flex items-center justify-center space-x-2 py-3 px-3.5 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 whitespace-nowrap shrink-0 sm:shrink ${
                   activeTab === 'prompts'
                     ? 'bg-blue-600 text-white shadow-md shadow-blue-500/10'
                     : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
@@ -399,7 +400,7 @@ const App: React.FC = () => {
               {/* Bài viết mới tab */}
               <button
                 onClick={() => setActiveTab('articles')}
-                className={`flex-1 flex items-center justify-center space-x-2 py-3 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 ${
+                className={`flex-1 flex items-center justify-center space-x-2 py-3 px-3.5 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 whitespace-nowrap shrink-0 sm:shrink ${
                   activeTab === 'articles'
                     ? 'bg-blue-600 text-white shadow-md shadow-blue-500/10'
                     : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
@@ -412,7 +413,7 @@ const App: React.FC = () => {
               {/* Font Việt hóa tab */}
               <button
                 onClick={() => setActiveTab('fonts')}
-                className={`flex-1 flex items-center justify-center space-x-2 py-3 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 ${
+                className={`flex-1 flex items-center justify-center space-x-2 py-3 px-3.5 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 whitespace-nowrap shrink-0 sm:shrink ${
                   activeTab === 'fonts'
                     ? 'bg-blue-600 text-white shadow-md shadow-blue-500/10'
                     : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
@@ -424,7 +425,7 @@ const App: React.FC = () => {
 
               <button
                 onClick={() => setActiveTab('contact')}
-                className={`flex-1 flex items-center justify-center space-x-2 py-3 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 ${
+                className={`flex-1 flex items-center justify-center space-x-2 py-3 px-3.5 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 whitespace-nowrap shrink-0 sm:shrink ${
                   activeTab === 'contact'
                     ? 'bg-blue-600 text-white shadow-md shadow-blue-500/10'
                     : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
@@ -438,7 +439,7 @@ const App: React.FC = () => {
               {currentUser && (
                 <button
                   onClick={() => setActiveTab('profile')}
-                  className={`flex-1 flex items-center justify-center space-x-2 py-3 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 ${
+                  className={`flex-1 flex items-center justify-center space-x-2 py-3 px-3.5 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 whitespace-nowrap shrink-0 sm:shrink ${
                     activeTab === 'profile'
                       ? 'bg-blue-600 text-white shadow-md shadow-blue-500/10'
                       : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
@@ -453,7 +454,7 @@ const App: React.FC = () => {
               {currentUser && currentUser.role === 'Admin' && (
                 <button
                   onClick={() => setActiveTab('admin')}
-                  className={`flex-1 flex items-center justify-center space-x-2 py-3 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 ${
+                  className={`flex-1 flex items-center justify-center space-x-2 py-3 px-3.5 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 whitespace-nowrap shrink-0 sm:shrink ${
                     activeTab === 'admin'
                       ? 'bg-purple-600 text-white shadow-md shadow-purple-500/10'
                       : 'text-purple-600 hover:text-purple-700 bg-purple-50 hover:bg-purple-100/70 border border-purple-200/50'
@@ -468,42 +469,52 @@ const App: React.FC = () => {
 
           {/* Render Dynamic Layout Elements */}
           <div className="min-h-[450px]">
-            {activeTab === 'designs' && (
-              <DesignHub 
-                currentUser={currentUser} 
-                onRequireAuth={handleRequireAuth}
-              />
-            )}
-            {activeTab === 'prompts' && (
-              <PromptHub 
-                currentUser={currentUser} 
-                onRequireAuth={handleRequireAuth}
-              />
-            )}
-            {activeTab === 'articles' && (
-              <ArticleHub 
-                currentUser={currentUser} 
-                onNavigateDesignHub={() => setActiveTab('designs')} 
-                onRequireAuth={handleRequireAuth}
-              />
-            )}
-            {activeTab === 'fonts' && (
-              <FontHub 
-                currentUser={currentUser}
-                systemConfig={systemConfig}
-                onRequireAuth={handleRequireAuth}
-              />
-            )}
-            {activeTab === 'contact' && <ContactHub />}
-            {activeTab === 'profile' && currentUser && (
-              <MemberProfile 
-                currentUser={currentUser} 
-                onUpdateUser={handleUpdateCurrentUser} 
-              />
-            )}
-            {activeTab === 'admin' && currentUser?.role === 'Admin' && (
-              <AdminDashboard currentUser={currentUser} />
-            )}
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={activeTab}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -12 }}
+                transition={{ duration: 0.25, ease: [0.25, 1, 0.5, 1] }}
+              >
+                {activeTab === 'designs' && (
+                  <DesignHub 
+                    currentUser={currentUser} 
+                    onRequireAuth={handleRequireAuth}
+                  />
+                )}
+                {activeTab === 'prompts' && (
+                  <PromptHub 
+                    currentUser={currentUser} 
+                    onRequireAuth={handleRequireAuth}
+                  />
+                )}
+                {activeTab === 'articles' && (
+                  <ArticleHub 
+                    currentUser={currentUser} 
+                    onNavigateDesignHub={() => setActiveTab('designs')} 
+                    onRequireAuth={handleRequireAuth}
+                  />
+                )}
+                {activeTab === 'fonts' && (
+                  <FontHub 
+                    currentUser={currentUser}
+                    systemConfig={systemConfig}
+                    onRequireAuth={handleRequireAuth}
+                  />
+                )}
+                {activeTab === 'contact' && <ContactHub />}
+                {activeTab === 'profile' && currentUser && (
+                  <MemberProfile 
+                    currentUser={currentUser} 
+                    onUpdateUser={handleUpdateCurrentUser} 
+                  />
+                )}
+                {activeTab === 'admin' && currentUser?.role === 'Admin' && (
+                  <AdminDashboard currentUser={currentUser} />
+                )}
+              </motion.div>
+            </AnimatePresence>
           </div>
 
           {/* Site Footer */}

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   X, Save, Sparkles, Image as ImageIcon, Code, Info, 
-  Check, AlertCircle, ShieldAlert, Tag, Crown
+  Check, AlertCircle, ShieldAlert, Tag, Crown, Upload, HardDrive, FolderPlus, ExternalLink
 } from 'lucide-react';
 import { AIPrompt, User } from '../types';
 import { scanContentSafety } from '../lib/contentModeration';
@@ -32,9 +32,95 @@ export const PromptEditorModal: React.FC<PromptEditorModalProps> = ({
   const [status, setStatus] = useState<'Approved' | 'Pending' | 'Rejected'>('Approved');
   const [isVip, setIsVip] = useState(false);
   
+  // Drive & Apps Script States
+  const [driveUrl, setDriveUrl] = useState('');
+  const [googleAppsScriptUrl, setGoogleAppsScriptUrl] = useState('');
+  const [promptFile, setPromptFile] = useState<File | null>(null);
+  const [promptFileName, setPromptFileName] = useState('');
+  const [isUploadingToDrive, setIsUploadingToDrive] = useState(false);
+  const [driveUploadSuccess, setDriveUploadSuccess] = useState<string | null>(null);
+  const [error, setError] = useState('');
+
   // AI Optimization state
   const [isOptimizing, setIsOptimizing] = useState(false);
-  const [safetyNotice, setSafetyNotice] = useState<{ isSafe: boolean; keywords: string[] } | null>(null);
+  const [safetyNotice, setSafetyNotice] = useState<import('../lib/contentModeration').SafetyCheckResult | null>(null);
+
+  useEffect(() => {
+    try {
+      const savedConfig = localStorage.getItem('ictc_system_config');
+      if (savedConfig) {
+        const parsed = JSON.parse(savedConfig);
+        if (parsed.googleAppsScriptUrl) {
+          setGoogleAppsScriptUrl(parsed.googleAppsScriptUrl);
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }, []);
+
+  const handlePromptFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setPromptFile(file);
+      setPromptFileName(file.name);
+      
+      if (!title) {
+        const cleanName = file.name.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ");
+        setTitle(cleanName);
+      }
+    }
+  };
+
+  const handleAutoUploadToDrive = () => {
+    if (!promptFile) {
+      setError('Vui lòng chọn tệp tin đính kèm trước!');
+      return;
+    }
+    if (!googleAppsScriptUrl) {
+      setError('Hệ thống chưa cấu hình URL Apps Script. Vui lòng dán link thủ công.');
+      return;
+    }
+
+    setIsUploadingToDrive(true);
+    setError('');
+    setDriveUploadSuccess(null);
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const base64 = event.target?.result as string;
+        
+        await fetch(googleAppsScriptUrl, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: {
+            'Content-Type': 'text/plain',
+          },
+          body: JSON.stringify({
+            fileName: promptFile.name,
+            mimeType: promptFile.type || 'application/octet-stream',
+            fileData: base64,
+            contentType: 'prompt',
+            title: title || promptFile.name,
+            contributor: currentUser.displayName || 'Admin ICTC',
+            email: currentUser.email,
+            description: rawPrompt || 'Tệp câu lệnh mẫu tải lên trực tiếp'
+          })
+        });
+
+        const resultDriveUrl = `https://drive.google.com/drive/folders/1adp9EiA1GTNFSaq2g0cz8dJbr1YpDzFd`;
+        setDriveUrl(resultDriveUrl);
+        setDriveUploadSuccess('Tải lên hoàn tất! Tệp tin đã được chuyển thẳng tới thư mục Google Drive: /Promt mẫu.');
+      } catch (err: any) {
+        console.error(err);
+        setError('Không thể kết nối đến máy chủ Google Drive. Vui lòng tải lên thủ công.');
+      } finally {
+        setIsUploadingToDrive(false);
+      }
+    };
+    reader.readAsDataURL(promptFile);
+  };
 
   useEffect(() => {
     if (editingPrompt) {
@@ -47,16 +133,18 @@ export const PromptEditorModal: React.FC<PromptEditorModalProps> = ({
       setTags(editingPrompt.tags.join(', '));
       setStatus(editingPrompt.status || 'Approved');
       setIsVip(!!editingPrompt.isVip);
+      setDriveUrl(editingPrompt.driveUrl || '');
     } else {
       setTitle('');
       setToolType('Midjourney');
       setCategory('Phông Hội Nghị');
       setRawPrompt('');
       setOptimizedPrompt('');
-      setPreviewImageUrl('https://images.unsplash.com/photo-1541872703-74c5e44368f9?auto=format&fit=crop&w=1200&q=80');
-      setTags('Phông đỏ, Trống đồng, Hội nghị');
+      setPreviewImageUrl('https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1200&q=80');
+      setTags('Phong dai hoi, Trong dong, Doan Thanh Nien, Do');
       setStatus('Approved');
       setIsVip(false);
+      setDriveUrl('');
     }
     setSafetyNotice(null);
   }, [editingPrompt, isOpen]);
@@ -68,7 +156,7 @@ export const PromptEditorModal: React.FC<PromptEditorModalProps> = ({
     if (!rawPrompt) return;
     setIsOptimizing(true);
     try {
-      const result = await optimizePrompt(rawPrompt, toolType as any);
+      const result = await optimizePrompt(rawPrompt, category, toolType as any);
       setOptimizedPrompt(result);
     } catch (e) {
       // Fallback
@@ -79,21 +167,27 @@ export const PromptEditorModal: React.FC<PromptEditorModalProps> = ({
   };
 
   const handleScanText = () => {
-    const combinedText = `${title} ${rawPrompt} ${optimizedPrompt} ${tags}`;
-    const scanResult = scanContentSafety(combinedText);
+    const scanResult = scanContentSafety({
+      title,
+      description: `${rawPrompt} ${optimizedPrompt}`,
+      tags: tags.split(',').map(t => t.trim())
+    });
     setSafetyNotice(scanResult);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    const combinedText = `${title} ${rawPrompt} ${optimizedPrompt} ${tags}`;
-    const scanResult = scanContentSafety(combinedText);
-
     const tagArray = tags
       .split(',')
       .map(t => t.trim())
       .filter(t => t.length > 0);
+
+    const scanResult = scanContentSafety({
+      title,
+      description: `${rawPrompt} ${optimizedPrompt}`,
+      tags: tagArray
+    });
 
     const promptData: AIPrompt = {
       id: editingPrompt?.id || `prompt-${Date.now()}`,
@@ -110,8 +204,9 @@ export const PromptEditorModal: React.FC<PromptEditorModalProps> = ({
       authorId: editingPrompt?.authorId || currentUser.id,
       status: status,
       autoFlaggedViolation: !scanResult.isSafe,
-      violationReason: !scanResult.isSafe ? `Nội dung chứa từ khóa nhạy cảm bị gắn cờ: ${scanResult.keywords.join(', ')}` : undefined,
+      violationReason: !scanResult.isSafe ? `Nội dung chứa từ khóa nhạy cảm bị gắn cờ: ${scanResult.matchedKeywords.join(', ')}` : undefined,
       isVip: isVip,
+      driveUrl: driveUrl,
     };
 
     onSave(promptData);
@@ -263,6 +358,145 @@ export const PromptEditorModal: React.FC<PromptEditorModalProps> = ({
               )}
             </div>
 
+            {/* Google Drive URL & Prompt File Routing */}
+            <div className="sm:col-span-2 space-y-1.5 pt-2">
+              <label className="text-[11px] font-black text-slate-800 uppercase tracking-wider flex items-center justify-between">
+                <span>Liên kết tải tệp tin / tài nguyên đính kèm Prompt</span>
+                <span className="text-[10px] text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded font-mono font-bold">Thư mục con: /Promt mẫu</span>
+              </label>
+
+              <div className="border border-purple-100 rounded-2xl overflow-hidden bg-gradient-to-b from-purple-50/50 to-indigo-50/20 p-4 space-y-4">
+                
+                {/* Thư mục tiếp nhận chỉ định */}
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-white p-3.5 rounded-xl border border-slate-100 shadow-xs">
+                  <div className="space-y-0.5">
+                    <p className="font-bold text-slate-900 text-xs flex items-center space-x-1.5">
+                      <HardDrive className="w-4 h-4 text-purple-600" />
+                      <span>Thư mục chỉ định của Nguyễn Huy:</span>
+                    </p>
+                    <p className="text-slate-500 text-[11px] leading-relaxed">
+                      Vui lòng tải tệp tin bổ trợ câu lệnh lên thư mục con <strong className="text-purple-700 font-bold">/Promt mẫu</strong> nằm trong thư mục dùng chung <strong className="text-slate-700">Tainguyenchiase</strong>.
+                    </p>
+                  </div>
+                  <a
+                    href="https://drive.google.com/drive/folders/1adp9EiA1GTNFSaq2g0cz8dJbr1YpDzFd"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center space-x-1.5 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl shadow-md shadow-purple-500/20 transition-all shrink-0 font-sans"
+                  >
+                    <FolderPlus className="w-4 h-4" />
+                    <span>Mở thư mục /Promt mẫu</span>
+                    <ExternalLink className="w-3 h-3 opacity-80" />
+                  </a>
+                </div>
+
+                {/* Upload file simulation & Automatic upload */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <span className="block text-[10px] font-bold text-slate-500 uppercase">A. Chọn tệp bổ trợ từ máy tính</span>
+                    <div className="p-4 border-2 border-dashed border-slate-300 hover:border-purple-500 rounded-xl text-center space-y-1.5 bg-white hover:bg-purple-50/20 transition-colors relative cursor-pointer">
+                      <input
+                        type="file"
+                        accept=".txt,.zip,.rar,.json,.png,.jpg,.jpeg"
+                        onChange={handlePromptFileChange}
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      />
+                      <Upload className="w-5 h-5 text-purple-600 mx-auto" />
+                      <div className="text-xs">
+                        {promptFileName ? (
+                          <span className="font-bold text-purple-700 block truncate">{promptFileName}</span>
+                        ) : (
+                          <span className="font-bold text-slate-800">Nhấp chọn tệp đính kèm (.zip, .txt...)</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1 flex flex-col justify-between">
+                    <div>
+                      <span className="block text-[10px] font-bold text-slate-500 uppercase">B. Hoặc Nhập URL Tải về / Link Drive</span>
+                      <input
+                        type="url"
+                        placeholder="https://drive.google.com/file/d/... hoặc link tải trực tiếp"
+                        value={driveUrl}
+                        onChange={(e) => setDriveUrl(e.target.value)}
+                        className="w-full bg-white text-slate-900 rounded-xl border border-slate-200 px-3.5 py-3 text-xs focus:ring-2 focus:ring-purple-500 focus:outline-none placeholder:text-slate-400"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Automatic Upload via Google Apps Script (If configured) */}
+                {googleAppsScriptUrl ? (
+                  <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2 text-emerald-850">
+                        <Sparkles className="w-4 h-4 text-emerald-600 animate-pulse" />
+                        <span className="text-xs font-bold">Phát hiện Google Apps Script Web App của Nguyễn Huy</span>
+                      </div>
+                      <span className="text-[9px] bg-emerald-200/50 text-emerald-800 px-1.5 py-0.5 rounded font-bold uppercase">Sẵn sàng</span>
+                    </div>
+                    <p className="text-[10px] text-emerald-700 leading-snug">
+                      Bạn có thể tải tệp lên trực tiếp. Hệ thống sẽ tự động chuyển tệp vào thư mục con <strong className="font-black text-emerald-900">/Promt mẫu</strong> của bạn ngay lập tức!
+                    </p>
+                    
+                    {promptFile ? (
+                      <div className="pt-1 flex items-center justify-between gap-3">
+                        <div className="text-[10px] text-slate-500 truncate max-w-[60%]">
+                          Tệp đang chọn: <strong className="text-slate-700 font-bold">{promptFileName}</strong>
+                        </div>
+                        <button
+                          type="button"
+                          disabled={isUploadingToDrive}
+                          onClick={handleAutoUploadToDrive}
+                          className={`px-4 py-1.5 rounded-xl font-bold text-xs text-white flex items-center space-x-1.5 transition-all ${
+                            isUploadingToDrive 
+                              ? 'bg-slate-400 cursor-not-allowed' 
+                              : 'bg-emerald-600 hover:bg-emerald-700 shadow-sm shadow-emerald-500/20'
+                          }`}
+                        >
+                          {isUploadingToDrive ? (
+                            <>
+                              <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                              <span>Đang chuyển lên Drive...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Upload className="w-3.5 h-3.5" />
+                              <span>Bắt đầu Upload tự động</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="text-[11px] text-slate-400 font-medium italic">
+                        * Hãy nhấp chọn tệp tin từ máy tính để bắt đầu quá trình tải lên tự động.
+                      </div>
+                    )}
+
+                    {driveUploadSuccess && (
+                      <div className="p-2 bg-emerald-100/50 border border-emerald-300 text-emerald-900 rounded-lg text-[11px] font-bold flex items-center space-x-1.5">
+                        <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span>{driveUploadSuccess}</span>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="p-3 bg-slate-100 rounded-xl text-[10px] text-slate-500 flex items-center space-x-2">
+                    <Info className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <span>Admin có thể cấu hình <strong>Google Apps Script URL</strong> trong cài đặt quản trị để bật chức năng upload 1-click tự động định tuyến.</span>
+                  </div>
+                )}
+
+                {error && (
+                  <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold rounded-xl flex items-center space-x-1.5">
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                    <span>{error}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
             {/* Tags */}
             <div className="sm:col-span-2 space-y-1">
               <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center justify-between">
@@ -344,7 +578,7 @@ export const PromptEditorModal: React.FC<PromptEditorModalProps> = ({
                 <>
                   <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
                   <div className="leading-relaxed">
-                    <strong className="font-bold text-rose-950">Gắn cờ nhạy cảm:</strong> Nội dung có chứa từ ngữ cần loại bỏ: <span className="font-extrabold text-rose-600">"{safetyNotice.keywords.join(', ')}"</span>. Hãy biên tập lại để đảm bảo tính chuẩn mực học thuật.
+                    <strong className="font-bold text-rose-950">Gắn cờ nhạy cảm:</strong> Nội dung có chứa từ ngữ cần loại bỏ: <span className="font-extrabold text-rose-600">"{safetyNotice.matchedKeywords.join(', ')}"</span>. Hãy biên tập lại để đảm bảo tính chuẩn mực học thuật.
                   </div>
                 </>
               )}

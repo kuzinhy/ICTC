@@ -255,7 +255,7 @@ export const PromptHub: React.FC<PromptHubProps> = ({ currentUser, onRequireAuth
           reason: `Phát hiện từ khóa nghi vấn (${safetyCheck.matchedKeywords.join(', ')})`,
           details: `Prompt bị tự động gắn cờ kiểm duyệt rủi ro ${safetyCheck.riskLevel.toUpperCase()}.`,
           reporterName: 'Hệ Thống Tự Động (Hidden Scanner)',
-          severity: safetyCheck.riskLevel === 'high' ? 'high' : 'medium',
+          severity: safetyCheck.riskLevel === 'severe' ? 'high' : 'medium',
           autoFlagged: true
         });
       }
@@ -323,7 +323,7 @@ export const PromptHub: React.FC<PromptHubProps> = ({ currentUser, onRequireAuth
     if (!sandboxInput.trim()) return;
     setIsOptimizing(true);
     try {
-      const optimized = await optimizePrompt(sandboxInput, sandboxTool);
+      const optimized = await optimizePrompt(sandboxInput, 'Tổng hợp', sandboxTool);
       setPlaygroundOutput(optimized);
     } catch (e) {
       console.error(e);
@@ -970,6 +970,19 @@ export const PromptHub: React.FC<PromptHubProps> = ({ currentUser, onRequireAuth
                           </div>
 
                           <div className="flex items-center space-x-2">
+                            {prompt.driveUrl && (
+                              <a
+                                href={prompt.driveUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="px-2.5 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg text-[11px] font-bold transition-all flex items-center space-x-1"
+                                title="Tải tài nguyên đính kèm cho câu lệnh AI này"
+                              >
+                                <ExternalLink className="w-3.5 h-3.5 text-emerald-600" />
+                                <span>Tải tệp đính kèm</span>
+                              </a>
+                            )}
+
                             <button
                               onClick={() => sendPromptToSandbox(prompt)}
                               className="px-2.5 py-1 text-slate-600 hover:text-red-600 hover:bg-red-50 border border-slate-200 rounded-lg text-[11px] font-bold transition-all flex items-center space-x-1"
@@ -1137,6 +1150,19 @@ export const PromptHub: React.FC<PromptHubProps> = ({ currentUser, onRequireAuth
                               </>
                             )}
                           </button>
+                        )}
+
+                        {prompt.driveUrl && (
+                          <a
+                            href={prompt.driveUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="w-full py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-bold flex items-center justify-center space-x-1.5 transition-all active:scale-95"
+                            title="Tải tài nguyên đính kèm cho câu lệnh AI này"
+                          >
+                            <ExternalLink className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>Tải tệp đính kèm</span>
+                          </a>
                         )}
 
                         <div className="flex items-center justify-between text-[11px] text-slate-400 font-semibold">

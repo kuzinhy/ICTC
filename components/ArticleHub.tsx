@@ -209,7 +209,7 @@ export const ArticleHub: React.FC<ArticleHubProps> = ({
         reason: `Phát hiện từ khóa nghi vấn (${safetyCheck.matchedKeywords.join(', ')})`,
         details: `Nội dung bị hệ thống tự động gắn cờ cảnh báo rủi ro ${safetyCheck.riskLevel.toUpperCase()}.`,
         reporterName: 'Hệ Thống Tự Động (Hidden Scanner)',
-        severity: safetyCheck.riskLevel === 'high' ? 'high' : 'medium',
+        severity: safetyCheck.riskLevel === 'severe' ? 'high' : 'medium',
         autoFlagged: true
       });
     }

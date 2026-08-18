@@ -3,7 +3,8 @@ import {
   Type, Search, Download, Copy, Check, Sparkles, ExternalLink, 
   Layers, Sliders, RefreshCw, Bookmark, ArrowUpRight, HelpCircle,
   FileText, ShieldCheck, Tag, Eye, Heart, Palette, Plus, Code,
-  FolderPlus, HardDrive, Share2, Grid, List, Moon, Sun, Flag
+  FolderPlus, HardDrive, Share2, Grid, List, Moon, Sun, Flag,
+  Crown
 } from 'lucide-react';
 import { 
   VIETNAMESE_FONTS_DATA, GOOGLE_RESOURCES_DATA, FONT_CATEGORIES, 
@@ -12,6 +13,7 @@ import {
 import { DRIVE_DESIGN_FOLDER } from '../data/constants';
 import { FontUploadModal } from './FontUploadModal';
 import { ReportViolationModal } from './ReportViolationModal';
+import { VipUpgradeModal } from './VipUpgradeModal';
 import { fetchFontsFromDb, saveFontToDb } from '../lib/db';
 import { User, SystemConfig } from '../types';
 
@@ -52,6 +54,7 @@ export const FontHub: React.FC<FontHubProps> = ({
   const [activeTab, setActiveTab] = useState<'fonts' | 'google-resources'>('fonts');
   const [selectedFontForCdn, setSelectedFontForCdn] = useState<VietnameseFont | null>(null);
   const [reportingItem, setReportingItem] = useState<{ id: string; title: string } | null>(null);
+  const [isVipModalOpen, setIsVipModalOpen] = useState(false);
 
   // Load fonts from storage / DB on mount
   useEffect(() => {
@@ -472,14 +475,25 @@ export const FontHub: React.FC<FontHubProps> = ({
                 return (
                   <div
                     key={font.id}
-                    className={`border rounded-3xl shadow-sm hover:shadow-md transition-all overflow-hidden p-6 sm:p-8 space-y-6 ${
-                      font.isPinned ? 'border-blue-300 bg-gradient-to-b from-blue-50/20 to-white ring-1 ring-blue-200/50' : 'border-slate-200/90 bg-white'
+                    className={`border rounded-3xl shadow-sm hover:shadow-md transition-all overflow-hidden p-6 sm:p-8 space-y-6 relative ${
+                      font.isVip 
+                        ? 'border-transparent bg-gradient-to-b from-amber-50/40 via-white to-white ring-2 ring-amber-400/90 shadow-md shadow-amber-500/5 hover:shadow-xl hover:shadow-amber-500/10' 
+                        : font.isPinned 
+                          ? 'border-blue-300 bg-gradient-to-b from-blue-50/20 to-white ring-1 ring-blue-200/50' 
+                          : 'border-slate-200/90 bg-white'
                     }`}
                   >
                     {/* Top Header Row */}
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
                       <div className="space-y-1">
                         <div className="flex flex-wrap items-center gap-2">
+                          {font.isVip && (
+                            <span className="px-2.5 py-0.5 bg-gradient-to-r from-amber-500 via-orange-500 to-yellow-500 text-white border border-amber-300 text-[10px] font-black rounded-lg uppercase flex items-center space-x-1 shadow-sm">
+                              <Crown className="w-3 h-3 fill-white" />
+                              <span>VIP Đặc Quyền</span>
+                            </span>
+                          )}
+
                           <h3 className="text-xl font-black text-slate-900 tracking-tight">
                             {font.name}
                           </h3>
@@ -547,15 +561,25 @@ export const FontHub: React.FC<FontHubProps> = ({
                           )}
                         </button>
 
-                        <a
-                          href={font.downloadUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-all shadow-sm shadow-blue-500/20 active:scale-95"
-                        >
-                          <Download className="w-3.5 h-3.5" />
-                          <span>Tải Font</span>
-                        </a>
+                        {font.isVip && (!currentUser || (currentUser.role !== 'Admin' && !currentUser.isVip)) ? (
+                          <button
+                            onClick={() => setIsVipModalOpen(true)}
+                            className="px-4 py-2 bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-600 hover:to-yellow-600 text-white rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-all shadow-md shadow-amber-500/20 active:scale-95 border border-amber-400"
+                          >
+                            <Crown className="w-3.5 h-3.5 fill-white" />
+                            <span>Mở Khóa VIP</span>
+                          </button>
+                        ) : (
+                          <a
+                            href={font.downloadUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-all shadow-sm shadow-blue-500/20 active:scale-95"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                            <span>Tải Font</span>
+                          </a>
+                        )}
                       </div>
                     </div>
 
@@ -799,6 +823,13 @@ export const FontHub: React.FC<FontHubProps> = ({
           currentUser={currentUser}
         />
       )}
+
+      {/* VIP UPGRADE MODAL */}
+      <VipUpgradeModal
+        isOpen={isVipModalOpen}
+        onClose={() => setIsVipModalOpen(false)}
+        currentUser={currentUser}
+      />
 
     </div>
   );
