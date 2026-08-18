@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { 
   X, Save, Sparkles, Image as ImageIcon, Code, Info, 
-  Check, AlertCircle, ShieldAlert, Tag, Crown, Upload, HardDrive, FolderPlus, ExternalLink
+  Check, AlertCircle, ShieldAlert, Tag, Crown, Upload, HardDrive, FolderPlus, ExternalLink, Loader2
 } from 'lucide-react';
 import { AIPrompt, User } from '../types';
 import { scanContentSafety } from '../lib/contentModeration';
 import { optimizePrompt } from '../lib/gemini';
+import { uploadFileToGoogleDrive, getActiveAppsScriptUrl } from '../lib/appsScriptUploader';
 
 interface PromptEditorModalProps {
   isOpen: boolean;
@@ -72,13 +73,9 @@ export const PromptEditorModal: React.FC<PromptEditorModalProps> = ({
     }
   };
 
-  const handleAutoUploadToDrive = () => {
+  const handleAutoUploadToDrive = async () => {
     if (!promptFile) {
       setError('Vui lòng chọn tệp tin đính kèm trước!');
-      return;
-    }
-    if (!googleAppsScriptUrl) {
-      setError('Hệ thống chưa cấu hình URL Apps Script. Vui lòng dán link thủ công.');
       return;
     }
 
@@ -86,40 +83,27 @@ export const PromptEditorModal: React.FC<PromptEditorModalProps> = ({
     setError('');
     setDriveUploadSuccess(null);
 
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      try {
-        const base64 = event.target?.result as string;
-        
-        await fetch(googleAppsScriptUrl, {
-          method: 'POST',
-          mode: 'no-cors',
-          headers: {
-            'Content-Type': 'text/plain',
-          },
-          body: JSON.stringify({
-            fileName: promptFile.name,
-            mimeType: promptFile.type || 'application/octet-stream',
-            fileData: base64,
-            contentType: 'prompt',
-            title: title || promptFile.name,
-            contributor: currentUser.displayName || 'Admin ICTC',
-            email: currentUser.email,
-            description: rawPrompt || 'Tệp câu lệnh mẫu tải lên trực tiếp'
-          })
-        });
+    try {
+      const result = await uploadFileToGoogleDrive({
+        file: promptFile,
+        contentType: 'prompt',
+        title: title || promptFile.name,
+        contributor: currentUser.displayName || 'Admin ICTC',
+        email: currentUser.email,
+        description: rawPrompt || 'Tệp câu lệnh mẫu tải lên trực tiếp',
+        customScriptUrl: googleAppsScriptUrl
+      });
 
-        const resultDriveUrl = `https://drive.google.com/drive/folders/1adp9EiA1GTNFSaq2g0cz8dJbr1YpDzFd`;
-        setDriveUrl(resultDriveUrl);
-        setDriveUploadSuccess('Tải lên hoàn tất! Tệp tin đã được chuyển thẳng tới thư mục Google Drive: /Promt mẫu.');
-      } catch (err: any) {
-        console.error(err);
-        setError('Không thể kết nối đến máy chủ Google Drive. Vui lòng tải lên thủ công.');
-      } finally {
-        setIsUploadingToDrive(false);
+      if (result.fileUrl) {
+        setDriveUrl(result.fileUrl);
       }
-    };
-    reader.readAsDataURL(promptFile);
+      setDriveUploadSuccess(result.message);
+    } catch (err: any) {
+      console.error(err);
+      setError(`Không thể tải lên tự động: ${err?.message || 'Vui lòng kiểm tra lại cấu hình'}`);
+    } finally {
+      setIsUploadingToDrive(false);
+    }
   };
 
   useEffect(() => {

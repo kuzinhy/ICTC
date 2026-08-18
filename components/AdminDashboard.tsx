@@ -28,24 +28,48 @@ import { useToast } from '../context/ToastContext';
 
 interface AdminDashboardProps {
   currentUser: User;
+  designFiles: DesignFile[];
+  promptFiles: AIPrompt[];
+  articlesList: Article[];
+  fontsList: VietnameseFont[];
+  userList: User[];
+  systemConfig: SystemConfig;
+  onDesignUpdate: (updated: DesignFile[]) => void;
+  onPromptUpdate: (updated: AIPrompt[]) => void;
+  onArticleUpdate: (updated: Article[]) => void;
+  onFontUpdate: (updated: VietnameseFont[]) => void;
+  onUserUpdate: (updated: User[]) => void;
+  onConfigUpdate: (updated: SystemConfig) => void;
 }
 
 type ModerationFilterType = 'all' | 'designs' | 'prompts' | 'articles';
 type ModerationStatusFilter = 'pending' | 'approved' | 'rejected';
 
-export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) => {
+export const AdminDashboard: React.FC<AdminDashboardProps> = ({ 
+  currentUser,
+  designFiles,
+  promptFiles,
+  articlesList,
+  fontsList,
+  userList,
+  systemConfig,
+  onDesignUpdate,
+  onPromptUpdate,
+  onArticleUpdate,
+  onFontUpdate,
+  onUserUpdate,
+  onConfigUpdate
+}) => {
   const { success: toastSuccess, info: toastInfo, warning: toastWarning } = useToast();
   const [activeSubTab, setActiveSubTab] = useState<'moderation' | 'reports' | 'articles' | 'fonts' | 'users' | 'security' | 'settings' | 'uploadResearch'>('moderation');
-  
-  // States loaded from LocalStorage
-  const [userList, setUserList] = useState<User[]>([]);
-  const [designFiles, setDesignFiles] = useState<DesignFile[]>([]);
-  const [promptFiles, setPromptFiles] = useState<AIPrompt[]>([]);
-  const [articlesList, setArticlesList] = useState<Article[]>([]);
-  const [fontsList, setFontsList] = useState<VietnameseFont[]>(VIETNAMESE_FONTS_DATA);
+  const [localConfig, setLocalConfig] = useState<SystemConfig>(systemConfig);
   const [reportsList, setReportsList] = useState<ContentReport[]>([]);
-  const [systemConfig, setSystemConfig] = useState<SystemConfig>(DEFAULT_SYSTEM_CONFIG);
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // Update local config when prop changes (e.g. after cloud sync)
+  useEffect(() => {
+    setLocalConfig(systemConfig);
+  }, [systemConfig]);
 
   // Article creation/editing modal state
   const [isArticleEditorOpen, setIsArticleEditorOpen] = useState(false);
@@ -87,89 +111,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
 
   // Load Admin Data
   const loadAllData = () => {
-    // 1. Users list
-    const savedUsers = localStorage.getItem('ictc_registered_users');
-    if (savedUsers) {
-      try {
-        let parsed: User[] = JSON.parse(savedUsers);
-        parsed = parsed.filter(u => !['admin@ictc.io.vn', 'huy.design@ictc.io.vn', 'member@ictc.io.vn'].includes(u.email.toLowerCase()));
-        setUserList(parsed.length > 0 ? parsed : INITIAL_USERS);
-      } catch (e) {
-        setUserList(INITIAL_USERS);
-      }
-    } else {
-      setUserList(INITIAL_USERS);
-      localStorage.setItem('ictc_registered_users', JSON.stringify(INITIAL_USERS));
-    }
-
-    // 2. Articles list
-    const savedArticles = localStorage.getItem('ictc_articles');
-    if (savedArticles) {
-      try {
-        setArticlesList(JSON.parse(savedArticles));
-      } catch (e) {
-        setArticlesList(INITIAL_ARTICLES);
-      }
-    } else {
-      setArticlesList(INITIAL_ARTICLES);
-      localStorage.setItem('ictc_articles', JSON.stringify(INITIAL_ARTICLES));
-    }
-
-    // 3. Design Files
-    const savedDesigns = localStorage.getItem('ictc_design_files');
-    if (savedDesigns) {
-      try {
-        setDesignFiles(JSON.parse(savedDesigns));
-      } catch (e) {
-        setDesignFiles(INITIAL_DESIGN_FILES);
-      }
-    } else {
-      setDesignFiles(INITIAL_DESIGN_FILES);
-      localStorage.setItem('ictc_design_files', JSON.stringify(INITIAL_DESIGN_FILES));
-    }
-
-    // 4. AI Prompts
-    const savedPrompts = localStorage.getItem('ictc_ai_prompts');
-    if (savedPrompts) {
-      try {
-        setPromptFiles(JSON.parse(savedPrompts));
-      } catch (e) {
-        setPromptFiles(INITIAL_AI_PROMPTS);
-      }
-    } else {
-      setPromptFiles(INITIAL_AI_PROMPTS);
-      localStorage.setItem('ictc_ai_prompts', JSON.stringify(INITIAL_AI_PROMPTS));
-    }
-
-    // 5. System Config
-    const savedConfig = localStorage.getItem('ictc_system_config');
-    if (savedConfig) {
-      try { setSystemConfig(JSON.parse(savedConfig)); } catch (e) {}
-    } else {
-      localStorage.setItem('ictc_system_config', JSON.stringify(DEFAULT_SYSTEM_CONFIG));
-    }
-
-    // 6. Fonts list
-    const savedFonts = localStorage.getItem('ictc_vietnamese_fonts');
-    if (savedFonts) {
-      try {
-        const parsed = JSON.parse(savedFonts);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          setFontsList(parsed);
-        }
-      } catch (e) {
-        setFontsList(VIETNAMESE_FONTS_DATA);
-      }
-    } else {
-      setFontsList(VIETNAMESE_FONTS_DATA);
-    }
-    fetchFontsFromDb().then(dbFonts => {
-      if (dbFonts && dbFonts.length > 0) {
-        setFontsList(dbFonts);
-        localStorage.setItem('ictc_vietnamese_fonts', JSON.stringify(dbFonts));
-      }
-    }).catch(() => {});
-
     // 7. Content Reports
     const reports = fetchContentReports();
     setReportsList(reports);
@@ -188,8 +129,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
   // Handle Toggle Article Pin
   const handleTogglePinArticle = async (art: Article) => {
     const updated = articlesList.map(a => a.id === art.id ? { ...a, isPinned: !a.isPinned } : a);
-    setArticlesList(updated);
-    localStorage.setItem('ictc_articles', JSON.stringify(updated));
+    onArticleUpdate(updated);
     const target = updated.find(a => a.id === art.id);
     if (target) {
       saveArticleToDb(target).catch(console.warn);
@@ -218,8 +158,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
       updated = [savedArticle, ...articlesList];
       showToast('Đã xuất bản bài viết mới thành công!');
     }
-    setArticlesList(updated);
-    localStorage.setItem('ictc_articles', JSON.stringify(updated));
+    onArticleUpdate(updated);
     saveArticleToDb(savedArticle).catch(console.warn);
   };
 
@@ -227,8 +166,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
   const handleDeleteArticle = async (id: string) => {
     if (!confirm('Bạn có chắc chắn muốn xóa bài viết này không?')) return;
     const updated = articlesList.filter(a => a.id !== id);
-    setArticlesList(updated);
-    localStorage.setItem('ictc_articles', JSON.stringify(updated));
+    onArticleUpdate(updated);
     deleteArticleFromDb(id).catch(console.warn);
     showToast('Đã xóa bài viết thành công!');
   };
@@ -244,8 +182,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
       updated = [savedDesign, ...designFiles];
       showToast('Đã thêm mới tệp thiết kế thành công!');
     }
-    setDesignFiles(updated);
-    localStorage.setItem('ictc_design_files', JSON.stringify(updated));
+    onDesignUpdate(updated);
     saveDesignToDb(savedDesign).catch(console.warn);
     setIsDesignEditorOpen(false);
   };
@@ -253,8 +190,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
   const handleDeleteDesign = async (id: string) => {
     if (!confirm('Bạn có chắc chắn muốn xóa vĩnh viễn tệp thiết kế này khỏi hệ thống không?')) return;
     const updated = designFiles.filter(f => f.id !== id);
-    setDesignFiles(updated);
-    localStorage.setItem('ictc_design_files', JSON.stringify(updated));
+    onDesignUpdate(updated);
     deleteDesignFromDb(id).catch(console.warn);
     showToast('Đã xóa tệp thiết kế thành công!');
   };
@@ -270,8 +206,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
       updated = [savedPrompt, ...promptFiles];
       showToast('Đã thêm mới AI Prompt thành công!');
     }
-    setPromptFiles(updated);
-    localStorage.setItem('ictc_ai_prompts', JSON.stringify(updated));
+    onPromptUpdate(updated);
     savePromptToDb(savedPrompt).catch(console.warn);
     setIsPromptEditorOpen(false);
   };
@@ -279,8 +214,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
   const handleDeletePrompt = async (id: string) => {
     if (!confirm('Bạn có chắc chắn muốn xóa vĩnh viễn AI Prompt này khỏi hệ thống không?')) return;
     const updated = promptFiles.filter(p => p.id !== id);
-    setPromptFiles(updated);
-    localStorage.setItem('ictc_ai_prompts', JSON.stringify(updated));
+    onPromptUpdate(updated);
     deletePromptFromDb(id).catch(console.warn);
     showToast('Đã xóa AI Prompt thành công!');
   };
@@ -289,22 +223,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
   const handleApproveContent = (id: string, type: 'design' | 'prompt' | 'article') => {
     if (type === 'design') {
       const updated = designFiles.map(f => f.id === id ? { ...f, status: 'Approved' as const, rejectionReason: undefined } : f);
-      setDesignFiles(updated);
-      localStorage.setItem('ictc_design_files', JSON.stringify(updated));
+      onDesignUpdate(updated);
       const target = updated.find(f => f.id === id);
       if (target) saveDesignToDb(target).catch(console.warn);
       showToast('Đã phê duyệt và xuất bản file thiết kế thành công!');
     } else if (type === 'prompt') {
       const updated = promptFiles.map(p => p.id === id ? { ...p, status: 'Approved' as const, rejectionReason: undefined } : p);
-      setPromptFiles(updated);
-      localStorage.setItem('ictc_ai_prompts', JSON.stringify(updated));
+      onPromptUpdate(updated);
       const target = updated.find(p => p.id === id);
       if (target) savePromptToDb(target).catch(console.warn);
       showToast('Đã phê duyệt và công khai câu lệnh AI thành công!');
     } else if (type === 'article') {
       const updated = articlesList.map(a => a.id === id ? { ...a, status: 'Published' as const, rejectionReason: undefined } : a);
-      setArticlesList(updated);
-      localStorage.setItem('ictc_articles', JSON.stringify(updated));
+      onArticleUpdate(updated);
       const target = updated.find(a => a.id === id);
       if (target) saveArticleToDb(target).catch(console.warn);
       showToast('Đã phê duyệt và xuất bản bài viết lên trang tin tức!');
@@ -322,18 +253,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
 
     // Approve designs
     const updatedDesigns = designFiles.map(f => f.status === 'Pending' ? { ...f, status: 'Approved' as const } : f);
-    setDesignFiles(updatedDesigns);
-    localStorage.setItem('ictc_design_files', JSON.stringify(updatedDesigns));
+    onDesignUpdate(updatedDesigns);
 
     // Approve prompts
     const updatedPrompts = promptFiles.map(p => p.status === 'Pending' ? { ...p, status: 'Approved' as const } : p);
-    setPromptFiles(updatedPrompts);
-    localStorage.setItem('ictc_ai_prompts', JSON.stringify(updatedPrompts));
+    onPromptUpdate(updatedPrompts);
 
     // Approve articles
     const updatedArticles = articlesList.map(a => a.status === 'Pending' ? { ...a, status: 'Published' as const } : a);
-    setArticlesList(updatedArticles);
-    localStorage.setItem('ictc_articles', JSON.stringify(updatedArticles));
+    onArticleUpdate(updatedArticles);
 
     showToast(`Đã phê duyệt thành công ${totalPending} tài nguyên!`);
   };
@@ -351,20 +279,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
 
     if (type === 'design') {
       const updated = designFiles.map(f => f.id === id ? { ...f, status: 'Rejected' as const, rejectionReason } : f);
-      setDesignFiles(updated);
-      localStorage.setItem('ictc_design_files', JSON.stringify(updated));
+      onDesignUpdate(updated);
       const target = updated.find(f => f.id === id);
       if (target) saveDesignToDb(target).catch(console.warn);
     } else if (type === 'prompt') {
       const updated = promptFiles.map(p => p.id === id ? { ...p, status: 'Rejected' as const, rejectionReason } : p);
-      setPromptFiles(updated);
-      localStorage.setItem('ictc_ai_prompts', JSON.stringify(updated));
+      onPromptUpdate(updated);
       const target = updated.find(p => p.id === id);
       if (target) savePromptToDb(target).catch(console.warn);
     } else if (type === 'article') {
       const updated = articlesList.map(a => a.id === id ? { ...a, status: 'Rejected' as const, rejectionReason } : a);
-      setArticlesList(updated);
-      localStorage.setItem('ictc_articles', JSON.stringify(updated));
+      onArticleUpdate(updated);
       const target = updated.find(a => a.id === id);
       if (target) saveArticleToDb(target).catch(console.warn);
     }
@@ -379,7 +304,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
   // Save System Configuration
   const handleSaveConfig = (e: React.FormEvent) => {
     e.preventDefault();
-    localStorage.setItem('ictc_system_config', JSON.stringify(systemConfig));
+    onConfigUpdate(localConfig);
     setSaveSuccess(true);
     showToast('Cấu hình hệ thống đã được cập nhật thành công!');
     setTimeout(() => setSaveSuccess(false), 2500);
@@ -445,8 +370,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
       updated = [savedFont, ...fontsList];
       showToast(`Đã thêm bộ font mới "${savedFont.name}" vào kho lưu trữ!`);
     }
-    setFontsList(updated);
-    localStorage.setItem('ictc_vietnamese_fonts', JSON.stringify(updated));
+    onFontUpdate(updated);
     saveFontToDb(savedFont).catch(e => console.warn('Could not sync font to cloud:', e));
     setEditingFont(null);
   };
@@ -454,8 +378,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
   const handleDeleteFont = (fontId: string, fontName: string) => {
     if (window.confirm(`Bạn có chắc chắn muốn xóa bộ font "${fontName}" khỏi hệ thống?`)) {
       const updated = fontsList.filter(f => f.id !== fontId);
-      setFontsList(updated);
-      localStorage.setItem('ictc_vietnamese_fonts', JSON.stringify(updated));
+      onFontUpdate(updated);
       deleteFontFromDb(fontId).catch(e => console.warn('Could not delete font from cloud:', e));
       showToast(`Đã xóa font "${fontName}".`);
     }
@@ -466,8 +389,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
     if (!target) return;
     const updatedFont = { ...target, isPinned: !target.isPinned };
     const updated = fontsList.map(f => f.id === fontId ? updatedFont : f);
-    setFontsList(updated);
-    localStorage.setItem('ictc_vietnamese_fonts', JSON.stringify(updated));
+    onFontUpdate(updated);
     saveFontToDb(updatedFont).catch(e => console.warn('Could not sync font:', e));
     showToast(updatedFont.isPinned ? `Đã ghim nổi bật font "${target.name}"!` : `Đã bỏ ghim font "${target.name}".`);
   };
@@ -1512,8 +1434,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
           <div className="space-y-6 animate-fade-in">
             <MemberManagement 
               currentUser={currentUser} 
-              userList={userList} 
-              onUsersUpdated={(updated) => setUserList(updated)} 
+              users={userList} 
+              onUsersChange={onUserUpdate} 
             />
           </div>
         )}
@@ -1556,8 +1478,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
                   <input
                     type="text"
                     required
-                    value={systemConfig.siteName}
-                    onChange={(e) => setSystemConfig({ ...systemConfig, siteName: e.target.value })}
+                    value={localConfig.siteName}
+                    onChange={(e) => setLocalConfig({ ...localConfig, siteName: e.target.value })}
                     className="w-full bg-slate-50 text-slate-900 rounded-xl border border-slate-200 p-3 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white"
                   />
                 </div>
@@ -1565,8 +1487,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Model AI mặc định (Gemini)</label>
                   <select
-                    value={systemConfig.defaultAIModel}
-                    onChange={(e) => setSystemConfig({ ...systemConfig, defaultAIModel: e.target.value })}
+                    value={localConfig.defaultAIModel}
+                    onChange={(e) => setLocalConfig({ ...localConfig, defaultAIModel: e.target.value })}
                     className="w-full bg-slate-50 text-slate-900 rounded-xl border border-slate-200 p-3 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white"
                   >
                     <option value="gemini-2.5-flash">Google Gemini 2.5 Flash (Ổn định nhất)</option>
@@ -1581,8 +1503,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
                 <textarea
                   rows={2}
                   required
-                  value={systemConfig.siteDescription}
-                  onChange={(e) => setSystemConfig({ ...systemConfig, siteDescription: e.target.value })}
+                  value={localConfig.siteDescription}
+                  onChange={(e) => setLocalConfig({ ...localConfig, siteDescription: e.target.value })}
                   className="w-full bg-slate-50 text-slate-900 rounded-xl border border-slate-200 p-3 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white resize-none"
                 />
               </div>
@@ -1598,8 +1520,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
                 <input
                   type="url"
                   required
-                  value={systemConfig.sharedUploadDriveUrl || systemConfig.driveDesignFolder}
-                  onChange={(e) => setSystemConfig({ ...systemConfig, sharedUploadDriveUrl: e.target.value })}
+                  value={localConfig.sharedUploadDriveUrl || localConfig.driveDesignFolder}
+                  onChange={(e) => setLocalConfig({ ...localConfig, sharedUploadDriveUrl: e.target.value })}
                   className="w-full bg-white text-slate-700 font-mono text-xs rounded-xl border border-blue-200 p-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   placeholder="https://drive.google.com/drive/folders/..."
                 />
@@ -1613,8 +1535,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
                 <input
                   type="url"
                   required
-                  value={systemConfig.driveDesignFolder}
-                  onChange={(e) => setSystemConfig({ ...systemConfig, driveDesignFolder: e.target.value })}
+                  value={localConfig.driveDesignFolder}
+                  onChange={(e) => setLocalConfig({ ...localConfig, driveDesignFolder: e.target.value })}
                   className="w-full bg-slate-50 text-slate-600 font-mono text-xs rounded-xl border border-slate-200 p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white"
                 />
               </div>
@@ -1624,8 +1546,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
                 <input
                   type="url"
                   required
-                  value={systemConfig.drivePromptFolder}
-                  onChange={(e) => setSystemConfig({ ...systemConfig, drivePromptFolder: e.target.value })}
+                  value={localConfig.drivePromptFolder}
+                  onChange={(e) => setLocalConfig({ ...localConfig, drivePromptFolder: e.target.value })}
                   className="w-full bg-slate-50 text-slate-600 font-mono text-xs rounded-xl border border-slate-200 p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white"
                 />
               </div>
@@ -1634,8 +1556,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
                 <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">Thư mục Google Drive Chuyên Biệt Lưu Trữ Font Chữ</label>
                 <input
                   type="url"
-                  value={systemConfig.driveFontFolder || systemConfig.driveDesignFolder}
-                  onChange={(e) => setSystemConfig({ ...systemConfig, driveFontFolder: e.target.value })}
+                  value={localConfig.driveFontFolder || localConfig.driveDesignFolder}
+                  onChange={(e) => setLocalConfig({ ...localConfig, driveFontFolder: e.target.value })}
                   className="w-full bg-slate-50 text-slate-600 font-mono text-xs rounded-xl border border-slate-200 p-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white"
                   placeholder="https://drive.google.com/drive/folders/..."
                 />
@@ -1651,8 +1573,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
                 </div>
                 <input
                   type="url"
-                  value={systemConfig.googleAppsScriptUrl || ''}
-                  onChange={(e) => setSystemConfig({ ...systemConfig, googleAppsScriptUrl: e.target.value })}
+                  value={localConfig.googleAppsScriptUrl || ''}
+                  onChange={(e) => setLocalConfig({ ...localConfig, googleAppsScriptUrl: e.target.value })}
                   className="w-full bg-white text-slate-700 font-mono text-xs rounded-xl border border-emerald-200 p-3 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   placeholder="https://script.google.com/macros/s/.../exec"
                 />
@@ -1670,10 +1592,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
                   </div>
                   <button
                     type="button"
-                    onClick={() => setSystemConfig({ ...systemConfig, allowPublicUploads: !systemConfig.allowPublicUploads })}
+                    onClick={() => setLocalConfig({ ...localConfig, allowPublicUploads: !localConfig.allowPublicUploads })}
                     className="text-blue-600 hover:text-blue-700 transition-colors"
                   >
-                    {systemConfig.allowPublicUploads ? (
+                    {localConfig.allowPublicUploads ? (
                       <ToggleRight className="w-9 h-9 stroke-[1.5]" />
                     ) : (
                       <ToggleLeft className="w-9 h-9 text-slate-300 stroke-[1.5]" />
@@ -1688,10 +1610,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
                   </div>
                   <button
                     type="button"
-                    onClick={() => setSystemConfig({ ...systemConfig, autoApproveCreators: !systemConfig.autoApproveCreators })}
+                    onClick={() => setLocalConfig({ ...localConfig, autoApproveCreators: !localConfig.autoApproveCreators })}
                     className="text-emerald-600 hover:text-emerald-700 transition-colors"
                   >
-                    {systemConfig.autoApproveCreators ? (
+                    {localConfig.autoApproveCreators ? (
                       <ToggleRight className="w-9 h-9 stroke-[1.5]" />
                     ) : (
                       <ToggleLeft className="w-9 h-9 text-slate-300 stroke-[1.5]" />

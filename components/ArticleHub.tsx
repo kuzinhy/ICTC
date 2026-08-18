@@ -267,13 +267,13 @@ export const ArticleHub: React.FC<ArticleHubProps> = ({
 
   // Filtering
   const filteredArticles = useMemo(() => {
-    return articles.filter(art => {
+    return (articles || []).filter(art => {
       // Determine visibility:
       // 1. Published articles are visible to everyone
       // 2. Admins can view all articles (Published, Pending, Rejected)
       // 3. Members can view their own pending/rejected articles
       const isOwner = currentUser && (art.authorId === currentUser.id || art.author === currentUser.displayName);
-      const canView = art.status === 'Published' || currentUser?.role === 'Admin' || isOwner;
+      const canView = !art.status || art.status === 'Published' || art.status === 'Approved' || currentUser?.role === 'Admin' || isOwner;
       if (!canView) return false;
 
       const matchCategory = selectedCategory === 'Tất cả' || art.category === selectedCategory;

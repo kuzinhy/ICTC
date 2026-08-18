@@ -90,21 +90,22 @@ export const MemberManagement: React.FC<MemberManagementProps> = ({
 
   // KPI Calculations
   const stats = useMemo(() => {
-    const total = users.length;
-    const active = users.filter(u => (u.status || 'Active') === 'Active').length;
-    const pending = users.filter(u => u.status === 'Pending').length;
-    const admins = users.filter(u => u.role === 'Admin').length;
-    const creators = users.filter(u => u.role === 'Creator').length;
-    const suspended = users.filter(u => u.status === 'Suspended').length;
+    const safeUsers = users || [];
+    const total = safeUsers.length;
+    const active = safeUsers.filter(u => (u.status || 'Active') === 'Active').length;
+    const pending = safeUsers.filter(u => u.status === 'Pending').length;
+    const admins = safeUsers.filter(u => u.role === 'Admin').length;
+    const creators = safeUsers.filter(u => u.role === 'Creator').length;
+    const suspended = safeUsers.filter(u => u.status === 'Suspended').length;
     return { total, active, pending, admins, creators, suspended };
   }, [users]);
 
   // Filtered Users List
   const filteredUsers = useMemo(() => {
-    return users.filter(user => {
+    return (users || []).filter(user => {
       const matchSearch = 
-        user.displayName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (user.displayName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (user.email || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
         (user.department && user.department.toLowerCase().includes(searchTerm.toLowerCase()));
       
       const matchRole = roleFilter === 'All' || user.role === roleFilter;

@@ -2,11 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { 
   X, Upload, HardDrive, Type, Image as ImageIcon, Check, 
   AlertCircle, ExternalLink, ShieldCheck, Tag, FileText, 
-  Sparkles, Layers, Sliders, FolderPlus, Info, Eye, Settings
+  Sparkles, Layers, Sliders, FolderPlus, Info, Eye, Settings, Loader2
 } from 'lucide-react';
 import { VietnameseFont, FONT_CATEGORIES } from '../data/vietnamFontsData';
 import { DRIVE_DESIGN_FOLDER } from '../data/constants';
 import { scanContentSafety, submitContentReport } from '../lib/contentModeration';
+import { uploadFileToGoogleDrive, getActiveAppsScriptUrl } from '../lib/appsScriptUploader';
 
 interface FontUploadModalProps {
   isOpen: boolean;
@@ -159,13 +160,9 @@ export const FontUploadModal: React.FC<FontUploadModalProps> = ({
     }
   };
 
-  const handleAutoUploadToDrive = () => {
+  const handleAutoUploadToDrive = async () => {
     if (!fontFile) {
       setError('Vui lòng chọn tệp cài đặt Font trước!');
-      return;
-    }
-    if (!googleAppsScriptUrl) {
-      setError('Hệ thống chưa cấu hình URL Apps Script. Vui lòng dán link thủ công.');
       return;
     }
 
@@ -173,40 +170,27 @@ export const FontUploadModal: React.FC<FontUploadModalProps> = ({
     setError('');
     setDriveUploadSuccess(null);
 
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      try {
-        const base64 = event.target?.result as string;
-        
-        await fetch(googleAppsScriptUrl, {
-          method: 'POST',
-          mode: 'no-cors',
-          headers: {
-            'Content-Type': 'text/plain',
-          },
-          body: JSON.stringify({
-            fileName: fontFile.name,
-            mimeType: fontFile.type || 'application/octet-stream',
-            fileData: base64,
-            contentType: 'font',
-            title: name || fontFile.name,
-            contributor: creator || 'Thành viên ICTC',
-            email: 'nguyenhuy.thudaumot@gmail.com',
-            description: description || 'Tệp font được gửi từ form upload'
-          })
-        });
+    try {
+      const result = await uploadFileToGoogleDrive({
+        file: fontFile,
+        contentType: 'font',
+        title: name || fontFile.name,
+        contributor: creator || currentAuthorName || 'Thành viên ICTC',
+        email: 'nguyenhuy.thudaumot@gmail.com',
+        description: description || 'Tệp phông chữ được tải lên qua cổng thành viên',
+        customScriptUrl: googleAppsScriptUrl
+      });
 
-        const resultDriveUrl = `https://drive.google.com/drive/folders/1adp9EiA1GTNFSaq2g0cz8dJbr1YpDzFd`;
-        setDownloadUrl(resultDriveUrl);
-        setDriveUploadSuccess('Tải lên hoàn tất! Tệp tin đã được chuyển thẳng tới thư mục Google Drive: /Font.');
-      } catch (err: any) {
-        console.error(err);
-        setError('Không thể kết nối đến máy chủ Google Drive. Vui lòng tải lên thủ công.');
-      } finally {
-        setIsUploadingToDrive(false);
+      if (result.fileUrl) {
+        setDownloadUrl(result.fileUrl);
       }
-    };
-    reader.readAsDataURL(fontFile);
+      setDriveUploadSuccess(result.message);
+    } catch (err: any) {
+      console.error(err);
+      setError(`Không thể tải lên tự động: ${err?.message || 'Vui lòng kiểm tra lại cấu hình'}`);
+    } finally {
+      setIsUploadingToDrive(false);
+    }
   };
 
   // Handle Specimen / Cover Image Upload

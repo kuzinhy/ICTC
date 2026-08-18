@@ -343,8 +343,8 @@ export const PromptHub: React.FC<PromptHubProps> = ({ currentUser, prompts, onPr
   const tools = ['All', 'Midjourney', 'Gemini', 'DALL-E 3', 'Stable Diffusion'];
 
   const filteredPrompts = useMemo(() => {
-    return prompts.filter(prompt => {
-      const isVisible = prompt.status === 'Approved' || 
+    return (prompts || []).filter(prompt => {
+      const isVisible = !prompt.status || prompt.status === 'Approved' || 
                         (currentUser && (currentUser.role === 'Admin' || currentUser.id === prompt.authorId));
 
       if (!isVisible) return false;

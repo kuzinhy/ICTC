@@ -46,46 +46,40 @@ service cloud.firestore {
     }
 
     function isValidDesign(data) {
-      return data.keys().hasAll(['id', 'title', 'description', 'category', 'fileType', 'driveUrl', 'authorId', 'status'])
+      return data.keys().hasAll(['id', 'title', 'category', 'fileType', 'authorId', 'status'])
         && data.id is string
         && data.title is string
-        && data.title.size() <= 150
-        && data.description is string
-        && data.description.size() <= 1000
-        && data.driveUrl is string
+        && data.title.size() <= 200
         && data.status in ['Approved', 'Pending', 'Rejected'];
     }
 
     function isValidPrompt(data) {
-      return data.keys().hasAll(['id', 'title', 'rawPrompt', 'optimizedPrompt', 'category', 'toolType', 'authorId', 'status'])
+      return data.keys().hasAll(['id', 'title', 'rawPrompt', 'category', 'toolType', 'authorId', 'status'])
         && data.id is string
         && data.title is string
-        && data.title.size() <= 150
+        && data.title.size() <= 200
         && data.rawPrompt is string
-        && data.rawPrompt.size() <= 2000
-        && data.optimizedPrompt is string
-        && data.optimizedPrompt.size() <= 3000
         && data.status in ['Approved', 'Pending', 'Rejected'];
     }
 
     function isValidArticle(data) {
-      return data.keys().hasAll(['id', 'title', 'summary', 'content', 'category', 'author', 'status'])
+      return data.keys().hasAll(['id', 'title', 'summary', 'category', 'author', 'status'])
         && data.id is string
         && data.title is string
-        && data.title.size() <= 200
-        && data.summary is string
-        && data.summary.size() <= 1000
-        && data.content is string
-        && data.category is string
+        && data.title.size() <= 300
         && data.author is string
         && data.status in ['Published', 'Draft', 'Pending'];
     }
 
+    function isValidFont(data) {
+      return data.keys().hasAll(['id', 'name', 'category'])
+        && data.id is string
+        && data.name is string;
+    }
+
     function isValidConfig(data) {
-      return data.keys().hasAll(['siteName', 'driveDesignFolder', 'drivePromptFolder'])
-        && data.siteName is string
-        && data.driveDesignFolder is string
-        && data.drivePromptFolder is string;
+      return data.keys().hasAll(['siteName'])
+        && data.siteName is string;
     }
 
     // Match rules for users
@@ -157,3 +151,4 @@ service cloud.firestore {
     }
   }
 }
+

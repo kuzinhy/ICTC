@@ -268,9 +268,9 @@ export const DesignHub: React.FC<DesignHubProps> = ({ currentUser, files, onFile
 
   // Filtering: Public visitors see approved files; Admins see all; Members see approved + their own pending/rejected items
   const filteredFiles = useMemo(() => {
-    return files.filter(f => {
+    return (files || []).filter(f => {
       const isOwner = currentUser && (f.authorId === currentUser.id || f.author === currentUser.displayName);
-      const canView = f.status === 'Approved' || currentUser?.role === 'Admin' || isOwner;
+      const canView = !f.status || f.status === 'Approved' || currentUser?.role === 'Admin' || isOwner;
       if (!canView) return false;
       
       const matchesSearch = searchTerm === '' || 
@@ -765,8 +765,7 @@ export const DesignHub: React.FC<DesignHubProps> = ({ currentUser, files, onFile
                   onFileSelected={(fileData) => {
                     setAttachedFile(fileData);
                     if (!newTitle) {
-                      // remove extension from title
-                      const cleanName = fileData.name.replace(/\.[^/.]+$/, "");
+                      const cleanName = fileData.name.replace(/\.[^/.]+$/, "").replace(/[-_]/g, " ");
                       setNewTitle(cleanName);
                     }
                     if (fileData.type) {
@@ -775,8 +774,24 @@ export const DesignHub: React.FC<DesignHubProps> = ({ currentUser, files, onFile
                     if (fileData.size) {
                       setNewFileSize(fileData.size);
                     }
+                    if (fileData.driveUrl) {
+                      setNewDriveUrl(fileData.driveUrl);
+                    }
                   }}
-                  acceptedFormats={['.pptx', '.ppt', '.fig', '.pdf', '.zip', '.rar', '.canva', '.png', '.jpg', '.svg']}
+                  onDriveUrlDetected={(url) => {
+                    setNewDriveUrl(url);
+                  }}
+                  contentType="design"
+                  itemTitle={newTitle}
+                  contributorName={currentUser?.displayName || 'Thành viên ICTC'}
+                  contributorEmail={currentUser?.email || 'nguyenhuy.thudaumot@gmail.com'}
+                  selectedFileName={attachedFile?.name}
+                  selectedFileSize={attachedFile?.size}
+                  onClearFile={() => {
+                    setAttachedFile(null);
+                    setNewFileSize('');
+                  }}
+                  acceptedFormats={['.pptx', '.ppt', '.fig', '.ai', '.psd', '.pdf', '.zip', '.rar', '.canva', '.png', '.jpg', '.svg']}
                   maxSizeMB={50}
                 />
               </div>

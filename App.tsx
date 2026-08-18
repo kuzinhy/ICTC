@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { DesignHub } from './components/DesignHub';
 import { PromptHub } from './components/PromptHub';
@@ -24,14 +24,17 @@ import {
   FolderOpen, Sparkles, MessageCircle, LogIn, LogOut, 
   Shield, User as UserIcon, Settings, HelpCircle, Activity,
   BookOpen, Search, Command, Palette, Scale, ShieldCheck, Type,
-  Filter, ChevronDown, Check, Code, GraduationCap, TrendingUp, Award, Layers
+  Filter, ChevronDown, Check, Code, GraduationCap, TrendingUp, Award, Layers,
+  Bell
 } from 'lucide-react';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { auth } from './lib/firebase';
+import { auth, db } from './lib/firebase';
+import { onSnapshot, collection } from 'firebase/firestore';
 import { 
   testFirestoreConnection, fetchSystemConfig, fetchDesignsFromDb, 
   fetchPromptsFromDb, fetchUsersFromDb, fetchArticlesFromDb, saveUserToDb,
-  fetchFontsFromDb
+  fetchFontsFromDb, updateSystemConfigInDb, deleteUserFromDb,
+  handleFirestoreError, OperationType
 } from './lib/db';
 
 import { ToastContainer } from './components/ToastContainer';
@@ -62,6 +65,15 @@ const App: React.FC = () => {
   const [designFiles, setDesignFiles] = useState<DesignFile[]>([]);
   const [aiPrompts, setAiPrompts] = useState<AIPrompt[]>([]);
   const [fontsList, setFontsList] = useState<VietnameseFont[]>([]);
+  const [userList, setUserList] = useState<User[]>([]);
+
+  // Count pending items waiting for moderation
+  const pendingCount = useMemo(() => {
+    const designs = designFiles.filter(f => f.status === 'Pending').length;
+    const prompts = aiPrompts.filter(p => p.status === 'Pending').length;
+    const arts = articles.filter(a => a.status === 'Pending').length;
+    return designs + prompts + arts;
+  }, [designFiles, aiPrompts, articles]);
 
   // Consolidate data initialization and sync
   useEffect(() => {
@@ -78,15 +90,17 @@ const App: React.FC = () => {
       setAiPrompts(getLocal('ictc_ai_prompts', INITIAL_AI_PROMPTS));
       setArticles(getLocal('ictc_articles', INITIAL_ARTICLES));
       setFontsList(getLocal('ictc_vietnamese_fonts', VIETNAMESE_FONTS_DATA));
+      setUserList(getLocal('ictc_registered_users', INITIAL_USERS));
 
       // 2. Fetch fresh data from Cloud
       try {
-        const [config, designs, prompts, arts, dbFonts] = await Promise.all([
+        const [config, designs, prompts, arts, dbFonts, dbUsers] = await Promise.all([
           fetchSystemConfig(),
           fetchDesignsFromDb(),
           fetchPromptsFromDb(),
           fetchArticlesFromDb(),
-          fetchFontsFromDb()
+          fetchFontsFromDb(),
+          fetchUsersFromDb()
         ]);
 
         if (config) {
@@ -109,6 +123,10 @@ const App: React.FC = () => {
           setFontsList(dbFonts);
           localStorage.setItem('ictc_vietnamese_fonts', JSON.stringify(dbFonts));
         }
+        if (dbUsers?.length) {
+          setUserList(dbUsers);
+          localStorage.setItem('ictc_registered_users', JSON.stringify(dbUsers));
+        }
       } catch (e) {
         console.warn("Cloud sync failed, using local/mock data:", e);
       }
@@ -116,8 +134,82 @@ const App: React.FC = () => {
 
     initializeData();
 
+    // 3. Real-time sync listeners with safe error handling
+    const unsubDesigns = onSnapshot(
+      collection(db, 'designs'),
+      (snap) => {
+        const items = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as DesignFile));
+        if (items.length > 0) {
+          setDesignFiles(items);
+          localStorage.setItem('ictc_design_files', JSON.stringify(items));
+        }
+      },
+      (error) => {
+        handleFirestoreError(error, OperationType.GET, 'designs');
+      }
+    );
+
+    const unsubPrompts = onSnapshot(
+      collection(db, 'prompts'),
+      (snap) => {
+        const items = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as AIPrompt));
+        if (items.length > 0) {
+          setAiPrompts(items);
+          localStorage.setItem('ictc_ai_prompts', JSON.stringify(items));
+        }
+      },
+      (error) => {
+        handleFirestoreError(error, OperationType.GET, 'prompts');
+      }
+    );
+
+    const unsubArticles = onSnapshot(
+      collection(db, 'articles'),
+      (snap) => {
+        const items = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Article));
+        if (items.length > 0) {
+          setArticles(items);
+          localStorage.setItem('ictc_articles', JSON.stringify(items));
+        }
+      },
+      (error) => {
+        handleFirestoreError(error, OperationType.GET, 'articles');
+      }
+    );
+
+    const unsubFonts = onSnapshot(
+      collection(db, 'fonts'),
+      (snap) => {
+        const items = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as VietnameseFont));
+        if (items.length > 0) {
+          setFontsList(items);
+          localStorage.setItem('ictc_vietnamese_fonts', JSON.stringify(items));
+        }
+      },
+      (error) => {
+        handleFirestoreError(error, OperationType.GET, 'fonts');
+      }
+    );
+
+    const unsubConfig = onSnapshot(
+      collection(db, 'systemConfig'),
+      (snap) => {
+        const global = snap.docs.find(d => d.id === 'global');
+        if (global) {
+          const config = global.data() as SystemConfig;
+          setSystemConfig(config);
+          localStorage.setItem('ictc_system_config', JSON.stringify(config));
+        }
+      },
+      (error) => {
+        handleFirestoreError(error, OperationType.GET, 'systemConfig');
+      }
+    );
+
+    let unsubUsers: (() => void) | null = null;
+
     // Listen to real Firebase Authentication status
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+    const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser && firebaseUser.email) {
         try {
           const allUsers = await fetchUsersFromDb();
@@ -142,6 +234,24 @@ const App: React.FC = () => {
 
           setCurrentUser(foundUser);
           localStorage.setItem('ictc_logged_in_user', JSON.stringify(foundUser));
+
+          // If Admin, subscribe to real-time users collection
+          if (foundUser.role === 'Admin') {
+            if (unsubUsers) unsubUsers();
+            unsubUsers = onSnapshot(
+              collection(db, 'users'),
+              (snap) => {
+                const items = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
+                if (items.length > 0) {
+                  setUserList(items);
+                  localStorage.setItem('ictc_registered_users', JSON.stringify(items));
+                }
+              },
+              (error) => {
+                handleFirestoreError(error, OperationType.GET, 'users');
+              }
+            );
+          }
         } catch (err) {
           console.warn("Error syncing user with Firestore:", err);
           // Fallback to local
@@ -153,10 +263,22 @@ const App: React.FC = () => {
       } else {
         setCurrentUser(null);
         localStorage.removeItem('ictc_logged_in_user');
+        if (unsubUsers) {
+          unsubUsers();
+          unsubUsers = null;
+        }
       }
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribeAuth();
+      unsubDesigns();
+      unsubPrompts();
+      unsubArticles();
+      unsubFonts();
+      if (unsubUsers) unsubUsers();
+      unsubConfig();
+    };
   }, [toastSuccess, toastInfo]);
 
   const handleLoginSuccess = (user: User) => {
@@ -458,7 +580,7 @@ const App: React.FC = () => {
                 {currentUser && currentUser.role === 'Admin' && (
                   <button
                     onClick={() => setActiveTab('admin')}
-                    className={`flex-1 flex items-center justify-center space-x-1.5 py-2 px-2.5 rounded-lg text-[11px] sm:text-xs font-bold transition-all duration-200 whitespace-nowrap shrink-0 sm:shrink ${
+                    className={`relative flex-1 flex items-center justify-center space-x-1.5 py-2 px-2.5 rounded-lg text-[11px] sm:text-xs font-bold transition-all duration-200 whitespace-nowrap shrink-0 sm:shrink group ${
                       activeTab === 'admin'
                         ? 'bg-purple-600 text-white shadow-sm shadow-purple-500/10'
                         : 'text-purple-600 hover:text-purple-700 bg-purple-50 hover:bg-purple-100/70 border border-purple-200/50'
@@ -466,6 +588,30 @@ const App: React.FC = () => {
                   >
                     <Shield className="w-3.5 h-3.5" />
                     <span>Quản trị</span>
+
+                    {/* Animated glowing bell and notification indicator when new member content is uploaded */}
+                    {pendingCount > 0 && (
+                      <span className="inline-flex items-center space-x-1 ml-1">
+                        {/* Glowing pulsating beacon dot */}
+                        <span className="relative flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500 shadow-sm shadow-rose-500/50"></span>
+                        </span>
+
+                        {/* Animated bell badge with pending count */}
+                        <span 
+                          className={`inline-flex items-center space-x-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-tight ${
+                            activeTab === 'admin'
+                              ? 'bg-rose-500 text-white ring-1 ring-white/30'
+                              : 'bg-rose-600 text-white shadow-xs shadow-rose-600/30'
+                          }`}
+                          title={`Có ${pendingCount} bài đăng mới của thành viên đang chờ duyệt`}
+                        >
+                          <Bell className="w-2.5 h-2.5 animate-bounce" />
+                          <span>{pendingCount}</span>
+                        </span>
+                      </span>
+                    )}
                   </button>
                 )}
               </div>
@@ -632,7 +778,40 @@ const App: React.FC = () => {
                   />
                 )}
                 {activeTab === 'admin' && currentUser?.role === 'Admin' && (
-                  <AdminDashboard currentUser={currentUser} />
+                  <AdminDashboard 
+                    currentUser={currentUser} 
+                    designFiles={designFiles}
+                    promptFiles={aiPrompts}
+                    articlesList={articles}
+                    fontsList={fontsList}
+                    userList={userList}
+                    systemConfig={systemConfig}
+                    onDesignUpdate={(updated) => {
+                      setDesignFiles(updated);
+                      localStorage.setItem('ictc_design_files', JSON.stringify(updated));
+                    }}
+                    onPromptUpdate={(updated) => {
+                      setAiPrompts(updated);
+                      localStorage.setItem('ictc_ai_prompts', JSON.stringify(updated));
+                    }}
+                    onArticleUpdate={(updated) => {
+                      setArticles(updated);
+                      localStorage.setItem('ictc_articles', JSON.stringify(updated));
+                    }}
+                    onFontUpdate={(updated) => {
+                      setFontsList(updated);
+                      localStorage.setItem('ictc_vietnamese_fonts', JSON.stringify(updated));
+                    }}
+                    onUserUpdate={(updated) => {
+                      setUserList(updated);
+                      localStorage.setItem('ictc_registered_users', JSON.stringify(updated));
+                    }}
+                    onConfigUpdate={(updated) => {
+                      setSystemConfig(updated);
+                      localStorage.setItem('ictc_system_config', JSON.stringify(updated));
+                      updateSystemConfigInDb(updated).catch(console.warn);
+                    }}
+                  />
                 )}
               </motion.div>
             </AnimatePresence>
