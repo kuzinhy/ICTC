@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { DesignHub } from './components/DesignHub';
 import { PromptHub } from './components/PromptHub';
@@ -22,7 +22,8 @@ import { UserAvatar } from './components/UserAvatar';
 import { 
   FolderOpen, Sparkles, MessageCircle, LogIn, LogOut, 
   Shield, User as UserIcon, Settings, HelpCircle, Activity,
-  BookOpen, Search, Command, Palette, Scale, ShieldCheck, Type
+  BookOpen, Search, Command, Palette, Scale, ShieldCheck, Type,
+  Filter, ChevronDown, Check, Code, GraduationCap, TrendingUp, Award, Layers
 } from 'lucide-react';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from './lib/firebase';
@@ -31,8 +32,24 @@ import {
   fetchPromptsFromDb, fetchUsersFromDb, fetchArticlesFromDb, saveUserToDb 
 } from './lib/db';
 
+import { ToastContainer } from './components/ToastContainer';
+import { useToast } from './context/ToastContext';
+
+const SPECIALTY_OPTIONS = [
+  { id: 'all', label: 'Tất cả chuyên ngành', icon: Layers, desc: 'Hiển thị toàn bộ tài nguyên học thuật' },
+  { id: 'design', label: 'Thiết kế & Đồ họa', icon: Palette, desc: 'Slide, Poster, Vector, Canva, UI/UX' },
+  { id: 'code', label: 'Lập trình & CNTT', icon: Code, desc: 'Website, Tech Prompts, CSDL, Code' },
+  { id: 'research', label: 'Nghiên cứu & Học thuật', icon: GraduationCap, desc: 'Tiểu luận, Báo cáo, Đề tài NCKH' },
+  { id: 'marketing', label: 'Kinh tế & Marketing', icon: TrendingUp, desc: 'Kế hoạch truyền thông, Pitch deck' },
+  { id: 'youth', label: 'Đoàn - Hội & Phong trào', icon: Award, desc: 'Hội nghị, Tình nguyện, Biểu mẫu' },
+];
+
 const App: React.FC = () => {
+  const { success: toastSuccess, info: toastInfo } = useToast();
   const [activeTab, setActiveTab] = useState<'designs' | 'prompts' | 'articles' | 'fonts' | 'contact' | 'admin' | 'profile'>('designs');
+  const [selectedSpecialty, setSelectedSpecialty] = useState<string>('all');
+  const [isSpecialtyDropdownOpen, setIsSpecialtyDropdownOpen] = useState(false);
+  const specialtyDropdownRef = useRef<HTMLDivElement>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [authReason, setAuthReason] = useState<string | undefined>();
@@ -60,6 +77,21 @@ const App: React.FC = () => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // Close specialty dropdown on outside click
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent | TouchEvent) => {
+      if (specialtyDropdownRef.current && !specialtyDropdownRef.current.contains(e.target as Node)) {
+        setIsSpecialtyDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    document.addEventListener('touchstart', handleOutsideClick);
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+      document.removeEventListener('touchstart', handleOutsideClick);
+    };
   }, []);
 
   // Initialize and seed local storage with default database schemas
@@ -197,6 +229,7 @@ const App: React.FC = () => {
   const handleLoginSuccess = (user: User) => {
     setCurrentUser(user);
     localStorage.setItem('ictc_logged_in_user', JSON.stringify(user));
+    toastSuccess(`Xin chào ${user.displayName}! Chúc bạn có trải nghiệm tuyệt vời cùng ICTC.`, 'Đăng nhập thành công');
   };
 
   const handleUpdateCurrentUser = (updatedUser: User) => {
@@ -216,6 +249,7 @@ const App: React.FC = () => {
     saveUserToDb(updatedUser).catch(err => {
       console.warn("Could not sync updated profile to Firestore:", err);
     });
+    toastSuccess('Hồ sơ cá nhân và avatar của bạn đã được cập nhật thành công!', 'Cập nhật hồ sơ');
   };
 
   const handleLogout = async () => {
@@ -227,6 +261,7 @@ const App: React.FC = () => {
     if (activeTab === 'admin') {
       setActiveTab('designs');
     }
+    toastInfo('Bạn đã đăng xuất tài khoản an toàn khỏi hệ thống.', 'Đã đăng xuất');
   };
 
   const handleRequireAuth = (reason?: string) => {
@@ -372,98 +407,194 @@ const App: React.FC = () => {
 
           {/* Primary View Tab Switcher */}
           <div className="max-w-6xl mx-auto my-6" id="primary-tab-switcher">
-            <div className="bg-white p-1.5 rounded-2xl border border-slate-200/80 shadow-md flex overflow-x-auto no-scrollbar gap-1 scroll-smooth">
-              <button
-                onClick={() => setActiveTab('designs')}
-                className={`flex-1 flex items-center justify-center space-x-2 py-3 px-3.5 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 whitespace-nowrap shrink-0 sm:shrink ${
-                  activeTab === 'designs'
-                    ? 'bg-blue-600 text-white shadow-md shadow-blue-500/10'
-                    : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
-                }`}
-              >
-                <FolderOpen className="w-4 h-4" />
-                <span>Thư viện Thiết kế</span>
-              </button>
-
-              <button
-                onClick={() => setActiveTab('prompts')}
-                className={`flex-1 flex items-center justify-center space-x-2 py-3 px-3.5 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 whitespace-nowrap shrink-0 sm:shrink ${
-                  activeTab === 'prompts'
-                    ? 'bg-blue-600 text-white shadow-md shadow-blue-500/10'
-                    : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
-                }`}
-              >
-                <Sparkles className="w-4 h-4" />
-                <span>Kho AI Prompts</span>
-              </button>
-
-              {/* Bài viết mới tab */}
-              <button
-                onClick={() => setActiveTab('articles')}
-                className={`flex-1 flex items-center justify-center space-x-2 py-3 px-3.5 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 whitespace-nowrap shrink-0 sm:shrink ${
-                  activeTab === 'articles'
-                    ? 'bg-blue-600 text-white shadow-md shadow-blue-500/10'
-                    : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
-                }`}
-              >
-                <BookOpen className="w-4 h-4" />
-                <span>Bài viết & Tin tức</span>
-              </button>
-
-              {/* Font Việt hóa tab */}
-              <button
-                onClick={() => setActiveTab('fonts')}
-                className={`flex-1 flex items-center justify-center space-x-2 py-3 px-3.5 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 whitespace-nowrap shrink-0 sm:shrink ${
-                  activeTab === 'fonts'
-                    ? 'bg-blue-600 text-white shadow-md shadow-blue-500/10'
-                    : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
-                }`}
-              >
-                <Type className="w-4 h-4" />
-                <span>Font Việt hóa</span>
-              </button>
-
-              <button
-                onClick={() => setActiveTab('contact')}
-                className={`flex-1 flex items-center justify-center space-x-2 py-3 px-3.5 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 whitespace-nowrap shrink-0 sm:shrink ${
-                  activeTab === 'contact'
-                    ? 'bg-blue-600 text-white shadow-md shadow-blue-500/10'
-                    : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
-                }`}
-              >
-                <MessageCircle className="w-4 h-4" />
-                <span>Liên hệ</span>
-              </button>
-
-              {/* Dynamic Profile tab is visible when currentUser is logged in */}
-              {currentUser && (
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+              {/* Tab Navigation Buttons */}
+              <div className="flex-1 bg-white p-1.5 rounded-2xl border border-slate-200/80 shadow-md flex overflow-x-auto no-scrollbar gap-1 scroll-smooth">
                 <button
-                  onClick={() => setActiveTab('profile')}
+                  onClick={() => setActiveTab('designs')}
                   className={`flex-1 flex items-center justify-center space-x-2 py-3 px-3.5 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 whitespace-nowrap shrink-0 sm:shrink ${
-                    activeTab === 'profile'
+                    activeTab === 'designs'
                       ? 'bg-blue-600 text-white shadow-md shadow-blue-500/10'
                       : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
                   }`}
                 >
-                  <UserIcon className="w-4 h-4" />
-                  <span>Hồ sơ</span>
+                  <FolderOpen className="w-4 h-4" />
+                  <span>Thư viện Thiết kế</span>
                 </button>
-              )}
 
-              {/* Dynamic Admin tab is ONLY visible when currentUser.role === 'Admin' */}
-              {currentUser && currentUser.role === 'Admin' && (
                 <button
-                  onClick={() => setActiveTab('admin')}
+                  onClick={() => setActiveTab('prompts')}
                   className={`flex-1 flex items-center justify-center space-x-2 py-3 px-3.5 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 whitespace-nowrap shrink-0 sm:shrink ${
-                    activeTab === 'admin'
-                      ? 'bg-purple-600 text-white shadow-md shadow-purple-500/10'
-                      : 'text-purple-600 hover:text-purple-700 bg-purple-50 hover:bg-purple-100/70 border border-purple-200/50'
+                    activeTab === 'prompts'
+                      ? 'bg-blue-600 text-white shadow-md shadow-blue-500/10'
+                      : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
                   }`}
                 >
-                  <Shield className="w-4 h-4" />
-                  <span>Quản trị</span>
+                  <Sparkles className="w-4 h-4" />
+                  <span>Kho AI Prompts</span>
                 </button>
-              )}
+
+                {/* Bài viết mới tab */}
+                <button
+                  onClick={() => setActiveTab('articles')}
+                  className={`flex-1 flex items-center justify-center space-x-2 py-3 px-3.5 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 whitespace-nowrap shrink-0 sm:shrink ${
+                    activeTab === 'articles'
+                      ? 'bg-blue-600 text-white shadow-md shadow-blue-500/10'
+                      : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
+                  }`}
+                >
+                  <BookOpen className="w-4 h-4" />
+                  <span>Bài viết & Tin tức</span>
+                </button>
+
+                {/* Font Việt hóa tab */}
+                <button
+                  onClick={() => setActiveTab('fonts')}
+                  className={`flex-1 flex items-center justify-center space-x-2 py-3 px-3.5 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 whitespace-nowrap shrink-0 sm:shrink ${
+                    activeTab === 'fonts'
+                      ? 'bg-blue-600 text-white shadow-md shadow-blue-500/10'
+                      : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
+                  }`}
+                >
+                  <Type className="w-4 h-4" />
+                  <span>Font Việt hóa</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab('contact')}
+                  className={`flex-1 flex items-center justify-center space-x-2 py-3 px-3.5 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 whitespace-nowrap shrink-0 sm:shrink ${
+                    activeTab === 'contact'
+                      ? 'bg-blue-600 text-white shadow-md shadow-blue-500/10'
+                      : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
+                  }`}
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  <span>Liên hệ</span>
+                </button>
+
+                {/* Dynamic Profile tab is visible when currentUser is logged in */}
+                {currentUser && (
+                  <button
+                    onClick={() => setActiveTab('profile')}
+                    className={`flex-1 flex items-center justify-center space-x-2 py-3 px-3.5 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 whitespace-nowrap shrink-0 sm:shrink ${
+                      activeTab === 'profile'
+                        ? 'bg-blue-600 text-white shadow-md shadow-blue-500/10'
+                        : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
+                    }`}
+                  >
+                    <UserIcon className="w-4 h-4" />
+                    <span>Hồ sơ</span>
+                  </button>
+                )}
+
+                {/* Dynamic Admin tab is ONLY visible when currentUser.role === 'Admin' */}
+                {currentUser && currentUser.role === 'Admin' && (
+                  <button
+                    onClick={() => setActiveTab('admin')}
+                    className={`flex-1 flex items-center justify-center space-x-2 py-3 px-3.5 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 whitespace-nowrap shrink-0 sm:shrink ${
+                      activeTab === 'admin'
+                        ? 'bg-purple-600 text-white shadow-md shadow-purple-500/10'
+                        : 'text-purple-600 hover:text-purple-700 bg-purple-50 hover:bg-purple-100/70 border border-purple-200/50'
+                    }`}
+                  >
+                    <Shield className="w-4 h-4" />
+                    <span>Quản trị</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Specialty Filter Dropdown */}
+              <div className="relative shrink-0" ref={specialtyDropdownRef} id="specialty-filter-container">
+                <button
+                  type="button"
+                  onClick={() => setIsSpecialtyDropdownOpen(!isSpecialtyDropdownOpen)}
+                  className={`w-full sm:w-auto flex items-center justify-between sm:justify-center space-x-2 py-3 px-4 rounded-2xl border text-xs sm:text-sm font-bold transition-all duration-200 shadow-md active:scale-95 cursor-pointer ${
+                    selectedSpecialty !== 'all'
+                      ? 'bg-blue-50 text-blue-700 border-blue-300 ring-2 ring-blue-500/20'
+                      : 'bg-white text-slate-700 hover:text-slate-900 hover:bg-slate-50 border-slate-200/80'
+                  }`}
+                  id="specialty-dropdown-trigger"
+                  aria-label="Lọc nhanh chuyên ngành"
+                  title="Lọc nhanh nội dung hiển thị theo chuyên ngành"
+                >
+                  <div className="flex items-center space-x-2">
+                    <Filter className={`w-4 h-4 ${selectedSpecialty !== 'all' ? 'text-blue-600' : 'text-slate-500'}`} />
+                    <span className="truncate max-w-[130px] md:max-w-[160px]">
+                      {SPECIALTY_OPTIONS.find(s => s.id === selectedSpecialty)?.label || 'Chuyên ngành'}
+                    </span>
+                    {selectedSpecialty !== 'all' && (
+                      <span className="w-2 h-2 rounded-full bg-blue-600"></span>
+                    )}
+                  </div>
+                  <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 shrink-0 ${isSpecialtyDropdownOpen ? 'rotate-180 text-blue-600' : ''}`} />
+                </button>
+
+                {/* Dropdown Popover Menu */}
+                {isSpecialtyDropdownOpen && (
+                  <div 
+                    className="absolute right-0 top-full mt-2 w-72 sm:w-80 bg-white rounded-2xl border border-slate-200 shadow-2xl p-2 z-50 animate-fade-in divide-y divide-slate-100"
+                    id="specialty-dropdown-menu"
+                  >
+                    <div className="px-3 py-2 text-[11px] font-black text-slate-400 uppercase tracking-wider flex items-center justify-between">
+                      <span className="flex items-center space-x-1.5">
+                        <Filter className="w-3.5 h-3.5 text-blue-500" />
+                        <span>Lọc theo chuyên ngành</span>
+                      </span>
+                      {selectedSpecialty !== 'all' && (
+                        <button 
+                          onClick={() => {
+                            setSelectedSpecialty('all');
+                            setIsSpecialtyDropdownOpen(false);
+                            toastInfo('Đã chuyển về xem tất cả tài nguyên hệ thống.', 'Đặt lại bộ lọc');
+                          }}
+                          className="text-blue-600 hover:text-blue-700 text-xs font-bold hover:underline cursor-pointer"
+                        >
+                          Đặt lại
+                        </button>
+                      )}
+                    </div>
+                    <div className="py-1.5 space-y-1 max-h-72 overflow-y-auto no-scrollbar">
+                      {SPECIALTY_OPTIONS.map((option) => {
+                        const IconComp = option.icon;
+                        const isSelected = selectedSpecialty === option.id;
+                        return (
+                          <button
+                            key={option.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedSpecialty(option.id);
+                              setIsSpecialtyDropdownOpen(false);
+                              if (option.id !== 'all') {
+                                toastInfo(`Đã lọc nội dung theo: ${option.label}`, 'Bộ lọc chuyên ngành');
+                              } else {
+                                toastInfo('Hiển thị toàn bộ tài nguyên học thuật.', 'Tất cả chuyên ngành');
+                              }
+                            }}
+                            className={`w-full flex items-start space-x-3 px-3 py-2.5 rounded-xl text-left transition-colors cursor-pointer ${
+                              isSelected 
+                                ? 'bg-blue-50/90 text-blue-900 font-bold border border-blue-200/60' 
+                                : 'hover:bg-slate-50 text-slate-700 border border-transparent'
+                            }`}
+                          >
+                            <div className={`p-1.5 rounded-lg shrink-0 mt-0.5 ${isSelected ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/20' : 'bg-slate-100 text-slate-600'}`}>
+                              <IconComp className="w-4 h-4" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between">
+                                <span className={`text-xs ${isSelected ? 'font-black text-blue-950' : 'font-bold text-slate-800'} truncate`}>
+                                  {option.label}
+                                </span>
+                                {isSelected && <Check className="w-3.5 h-3.5 text-blue-600 shrink-0 ml-1" />}
+                              </div>
+                              <p className="text-[11px] text-slate-500 truncate mt-0.5">{option.desc}</p>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -480,18 +611,21 @@ const App: React.FC = () => {
                 {activeTab === 'designs' && (
                   <DesignHub 
                     currentUser={currentUser} 
+                    selectedSpecialty={selectedSpecialty}
                     onRequireAuth={handleRequireAuth}
                   />
                 )}
                 {activeTab === 'prompts' && (
                   <PromptHub 
                     currentUser={currentUser} 
+                    selectedSpecialty={selectedSpecialty}
                     onRequireAuth={handleRequireAuth}
                   />
                 )}
                 {activeTab === 'articles' && (
                   <ArticleHub 
                     currentUser={currentUser} 
+                    selectedSpecialty={selectedSpecialty}
                     onNavigateDesignHub={() => setActiveTab('designs')} 
                     onRequireAuth={handleRequireAuth}
                   />
@@ -641,6 +775,9 @@ const App: React.FC = () => {
         onClose={() => setIsLegalOpen(false)}
         initialTab={legalTab}
       />
+
+      {/* Global Toast Notification System */}
+      <ToastContainer />
     </div>
   );
 };

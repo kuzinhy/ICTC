@@ -15,13 +15,16 @@ import { FileUploadZone } from './FileUploadZone';
 import { VietnamDesignPaletteModal } from './VietnamDesignPaletteModal';
 import { LegalComplianceModal } from './LegalComplianceModal';
 import { ReportViolationModal } from './ReportViolationModal';
+import { useToast } from '../context/ToastContext';
 
 interface DesignHubProps {
   currentUser: UserType | null;
+  selectedSpecialty?: string;
   onRequireAuth?: (reason?: string) => void;
 }
 
-export const DesignHub: React.FC<DesignHubProps> = ({ currentUser, onRequireAuth }) => {
+export const DesignHub: React.FC<DesignHubProps> = ({ currentUser, selectedSpecialty, onRequireAuth }) => {
+  const { success: toastSuccess, info: toastInfo, error: toastError } = useToast();
   const [files, setFiles] = useState<DesignFile[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
@@ -86,6 +89,7 @@ export const DesignHub: React.FC<DesignHubProps> = ({ currentUser, onRequireAuth
     if (target) {
       const updatedItem = { ...target, downloadsCount: target.downloadsCount + 1 };
       saveDesignToDb(updatedItem).catch(err => console.warn("Failed to update download count in Firestore:", err));
+      toastSuccess(`Đang tải file "${target.title}"... Chúc bạn có ấn phẩm thiết kế tuyệt đẹp!`, 'Bắt đầu tải xuống');
     }
     const updated = files.map(f => {
       if (f.id === fileId) {
@@ -220,12 +224,13 @@ export const DesignHub: React.FC<DesignHubProps> = ({ currentUser, onRequireAuth
 
       if (isAutoFlagged) {
         setFormSuccessMessage('CẢNH BÁO KIỂM DUYỆT: Bài đăng chứa từ ngữ cần xem xét. Nội dung đã được chuyển sang hàng chờ Ban Quản Trị thẩm định trước khi công khai!');
+        toastInfo('Nội dung đã được ghi nhận và đang chờ BQT phê duyệt theo nguyên tắc an toàn.', 'Chờ phê duyệt');
       } else {
-        setFormSuccessMessage(
-          isAdmin 
-            ? 'Tài nguyên của Quản trị viên đã được xuất bản trực tiếp thành công!' 
-            : 'Tài nguyên đã được gửi thành công! Bài đăng đang ở trạng thái "Chờ duyệt" và sẽ được Ban Quản trị kiểm duyệt.'
-        );
+        const msg = isAdmin 
+          ? 'Tài nguyên của Quản trị viên đã được xuất bản trực tiếp thành công!' 
+          : 'Tài nguyên đã được gửi thành công! Bài đăng đang ở trạng thái "Chờ duyệt" và sẽ được Ban Quản trị kiểm duyệt.';
+        setFormSuccessMessage(msg);
+        toastSuccess(isAdmin ? 'Tài nguyên đã được xuất bản trực tiếp!' : 'Đã gửi tài liệu! Chờ Ban Quản Trị kiểm duyệt.', 'Đóng góp thành công');
       }
     }
 
@@ -267,6 +272,7 @@ export const DesignHub: React.FC<DesignHubProps> = ({ currentUser, onRequireAuth
       } catch (err) {
         console.warn("Could not delete from Firestore:", err);
       }
+      toastInfo('Đã xóa tệp thiết kế khỏi hệ thống.', 'Đã xóa file');
     }
   };
 
@@ -291,7 +297,24 @@ export const DesignHub: React.FC<DesignHubProps> = ({ currentUser, onRequireAuth
       f.description.toLowerCase().includes(searchTerm.toLowerCase());
       
     const matchesCategory = selectedCategory === 'All' || f.category === selectedCategory;
-    return matchesSearch && matchesCategory;
+
+    let matchesSpecialty = true;
+    if (selectedSpecialty && selectedSpecialty !== 'all') {
+      const allText = `${f.title} ${f.description} ${f.category} ${f.tags.join(' ')}`.toLowerCase();
+      if (selectedSpecialty === 'design') {
+        matchesSpecialty = f.category === 'UI/UX Kits' || f.category === 'PowerPoint Templates' || f.category === 'Poster & Infographics' || f.category === 'Canva Templates' || /thiết kế|design|đồ họa|poster|banner|canva|figma|photoshop|vector|typography|slide/i.test(allText);
+      } else if (selectedSpecialty === 'code') {
+        matchesSpecialty = f.category === 'UI/UX Kits' || /lập trình|code|dev|cntt|web|react|python|html|css|it|khoa học máy tính|frontend|backend|database/i.test(allText);
+      } else if (selectedSpecialty === 'research') {
+        matchesSpecialty = f.category === 'Research Documents' || f.category === 'PowerPoint Templates' || /nghiên cứu|học thuật|báo cáo|tiểu luận|luận văn|khoa học|research|hội thảo|academic/i.test(allText);
+      } else if (selectedSpecialty === 'marketing') {
+        matchesSpecialty = /marketing|kinh tế|thương mại|quảng cáo|truyền thông|sale|pitch|kinh doanh|tài chính|kế hoạch/i.test(allText) || f.category === 'Poster & Infographics' || f.category === 'PowerPoint Templates';
+      } else if (selectedSpecialty === 'youth') {
+        matchesSpecialty = /đoàn|hội|thanh niên|tình nguyện|sinh viên|phong trào|hội nghị|đại hội|mùa hè xanh|tiếp sức/i.test(allText) || f.category === 'Poster & Infographics';
+      }
+    }
+
+    return matchesSearch && matchesCategory && matchesSpecialty;
   });
 
   return (

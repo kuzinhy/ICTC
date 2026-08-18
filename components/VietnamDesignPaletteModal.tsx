@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { X, Palette, Copy, Check, Info, Sparkles, Layers, BookOpen } from 'lucide-react';
+import { useToast } from '../context/ToastContext';
 
 interface VietnamDesignPaletteModalProps {
   isOpen: boolean;
@@ -104,13 +105,15 @@ export const VietnamDesignPaletteModal: React.FC<VietnamDesignPaletteModalProps>
   isOpen,
   onClose
 }) => {
+  const { success: toastSuccess } = useToast();
   const [copiedHex, setCopiedHex] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
-  const handleCopy = (hex: string) => {
+  const handleCopy = (hex: string, colorName?: string) => {
     navigator.clipboard.writeText(hex);
     setCopiedHex(hex);
+    toastSuccess(`Đã sao chép mã màu ${hex} ${colorName ? `(${colorName})` : ''} vào clipboard!`, 'Sao chép mã màu');
     setTimeout(() => setCopiedHex(null), 2000);
   };
 

@@ -16,9 +16,11 @@ import { scanContentSafety, submitContentReport } from '../lib/contentModeration
 import { VietnamDesignPaletteModal } from './VietnamDesignPaletteModal';
 import { LegalComplianceModal } from './LegalComplianceModal';
 import { ReportViolationModal } from './ReportViolationModal';
+import { useToast } from '../context/ToastContext';
 
 interface PromptHubProps {
   currentUser: User | null;
+  selectedSpecialty?: string;
   onRequireAuth?: (reason?: string) => void;
 }
 
@@ -52,7 +54,8 @@ const SAMPLE_PREVIEW_IMAGES = [
 
 const ITEMS_PER_PAGE = 8;
 
-export const PromptHub: React.FC<PromptHubProps> = ({ currentUser, onRequireAuth }) => {
+export const PromptHub: React.FC<PromptHubProps> = ({ currentUser, selectedSpecialty, onRequireAuth }) => {
+  const { success: toastSuccess, info: toastInfo, vip: toastVip, error: toastError } = useToast();
   const [prompts, setPrompts] = useState<AIPrompt[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('Tất cả');
@@ -164,12 +167,20 @@ export const PromptHub: React.FC<PromptHubProps> = ({ currentUser, onRequireAuth
     navigator.clipboard.writeText(text);
     if (id === 'sandbox') {
       setCopiedSandbox(true);
+      toastSuccess('Đã sao chép câu lệnh từ AI Sandbox vào clipboard!', 'Sao chép thành công');
       setTimeout(() => setCopiedSandbox(false), 2000);
     } else if (type === 'raw') {
       setCopiedRawId(id);
+      toastInfo('Đã sao chép ý tưởng đồ họa tiếng Việt chuẩn vào clipboard!', 'Ý tưởng tiếng Việt');
       setTimeout(() => setCopiedRawId(null), 2000);
     } else {
       setCopiedPromptId(id);
+      const promptObj = prompts.find(p => p.id === id);
+      if (promptObj?.isVip) {
+        toastVip(`Đã sao chép câu lệnh VIP "${promptObj.title}" chất lượng cao!`, 'Đặc quyền VIP');
+      } else {
+        toastSuccess('Đã sao chép câu lệnh AI Prompt chuẩn vào clipboard!', 'Sao chép thành công');
+      }
       setTimeout(() => setCopiedPromptId(null), 2000);
     }
   };
@@ -186,6 +197,7 @@ export const PromptHub: React.FC<PromptHubProps> = ({ currentUser, onRequireAuth
     if (target) {
       const updatedItem = { ...target, likesCount: (target.likesCount || 0) + 1 };
       savePromptToDb(updatedItem).catch(err => console.warn("Failed to sync like status to Firestore:", err));
+      toastSuccess(`Cảm ơn bạn đã yêu thích câu lệnh "${target.title}"!`, 'Thả tim thành công');
     }
     const updated = prompts.map(p => {
       if (p.id === promptId) {
@@ -356,6 +368,7 @@ export const PromptHub: React.FC<PromptHubProps> = ({ currentUser, onRequireAuth
     setSandboxInput(prompt.rawPrompt);
     setSandboxTool(prompt.toolType as any);
     setPlaygroundOutput(prompt.optimizedPrompt);
+    toastInfo(`Đã nạp câu lệnh "${prompt.title}" vào sân chơi AI Sandbox!`, 'AI Sandbox');
     window.scrollTo({ top: 350, behavior: 'smooth' });
   };
 
@@ -377,13 +390,29 @@ export const PromptHub: React.FC<PromptHubProps> = ({ currentUser, onRequireAuth
     const matchesCategory = selectedCategory === 'Tất cả' || prompt.category === selectedCategory;
     const matchesTag = selectedTag === 'Tất cả' || (prompt.tags && prompt.tags.some(t => t.toLowerCase().includes(selectedTag.toLowerCase())));
 
-    return matchesSearch && matchesTool && matchesCategory && matchesTag;
+    let matchesSpecialty = true;
+    if (selectedSpecialty && selectedSpecialty !== 'all') {
+      const allText = `${prompt.title} ${prompt.category} ${prompt.rawPrompt} ${prompt.optimizedPrompt} ${(prompt.tags || []).join(' ')}`.toLowerCase();
+      if (selectedSpecialty === 'design') {
+        matchesSpecialty = prompt.toolType !== 'Gemini' || /thiết kế|đồ họa|poster|banner|phông|backdrop|avatar|3d|vector|màu sắc|kiến trúc/i.test(allText);
+      } else if (selectedSpecialty === 'code') {
+        matchesSpecialty = prompt.toolType === 'Gemini' || /code|lập trình|cntt|web|script|python|react|thuật toán|sql|ai/i.test(allText);
+      } else if (selectedSpecialty === 'research') {
+        matchesSpecialty = /nghiên cứu|học thuật|báo cáo|tiểu luận|luận văn|khoa học|dịch thuật|tóm tắt|phân tích dữ liệu/i.test(allText);
+      } else if (selectedSpecialty === 'marketing') {
+        matchesSpecialty = /marketing|truyền thông|slogan|quảng cáo|content|chiến dịch|thương hiệu|bán hàng/i.test(allText);
+      } else if (selectedSpecialty === 'youth') {
+        matchesSpecialty = prompt.category === 'Phông Hội Nghị' || /đoàn|hội|thanh niên|tình nguyện|sinh viên|phong trào|đại hội|mùa hè xanh/i.test(allText);
+      }
+    }
+
+    return matchesSearch && matchesTool && matchesCategory && matchesTag && matchesSpecialty;
   });
 
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, selectedCategory, selectedTag, selectedTool]);
+  }, [searchTerm, selectedCategory, selectedTag, selectedTool, selectedSpecialty]);
 
   const totalPages = Math.ceil(filteredPrompts.length / ITEMS_PER_PAGE) || 1;
   const paginatedPrompts = filteredPrompts.slice(

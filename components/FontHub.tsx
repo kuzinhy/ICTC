@@ -16,6 +16,7 @@ import { ReportViolationModal } from './ReportViolationModal';
 import { VipUpgradeModal } from './VipUpgradeModal';
 import { fetchFontsFromDb, saveFontToDb } from '../lib/db';
 import { User, SystemConfig } from '../types';
+import { useToast } from '../context/ToastContext';
 
 interface FontHubProps {
   currentUser?: User | null;
@@ -39,6 +40,7 @@ export const FontHub: React.FC<FontHubProps> = ({
   systemConfig, 
   onRequireAuth 
 }) => {
+  const { success: toastSuccess, info: toastInfo } = useToast();
   const [fontsList, setFontsList] = useState<VietnameseFont[]>(VIETNAMESE_FONTS_DATA);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('Tất cả');
@@ -131,6 +133,7 @@ export const FontHub: React.FC<FontHubProps> = ({
     const cssRule = `font-family: ${font.fontFamily};`;
     navigator.clipboard.writeText(cssRule);
     setCopiedFontId(font.id);
+    toastSuccess(`Đã sao chép CSS: ${cssRule}`, 'Sao chép Font CSS');
     setTimeout(() => setCopiedFontId(null), 2000);
   };
 
@@ -145,6 +148,7 @@ export const FontHub: React.FC<FontHubProps> = ({
 
     navigator.clipboard.writeText(snippet);
     setCopiedCdnId(`${font.id}-${type}`);
+    toastSuccess(`Đã sao chép cú pháp nhúng CDN Google Fonts cho "${font.name}"!`, 'Sao chép CDN');
     setTimeout(() => setCopiedCdnId(null), 2000);
   };
 
@@ -153,6 +157,7 @@ export const FontHub: React.FC<FontHubProps> = ({
     setFontsList(updated);
     localStorage.setItem('ictc_vietnamese_fonts', JSON.stringify(updated));
     saveFontToDb(newFont).catch(e => console.warn('Could not sync to cloud db:', e));
+    toastSuccess(`Đã thêm font "${newFont.name}" vào thư viện font hệ thống!`, 'Thêm Font mới');
   };
 
   const driveFontFolderUrl = systemConfig?.driveFontFolder || systemConfig?.sharedUploadDriveUrl || DRIVE_DESIGN_FOLDER;

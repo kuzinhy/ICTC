@@ -14,9 +14,11 @@ import { LegalComplianceModal } from './LegalComplianceModal';
 import { ReportViolationModal } from './ReportViolationModal';
 import { saveArticleToDb, deleteArticleFromDb } from '../lib/db';
 import { scanContentSafety, submitContentReport } from '../lib/contentModeration';
+import { useToast } from '../context/ToastContext';
 
 interface ArticleHubProps {
   currentUser: UserType | null;
+  selectedSpecialty?: string;
   onNavigateDesignHub?: () => void;
   onRequireAuth?: (reason?: string) => void;
 }
@@ -32,9 +34,11 @@ const CATEGORIES = [
 
 export const ArticleHub: React.FC<ArticleHubProps> = ({ 
   currentUser, 
+  selectedSpecialty,
   onNavigateDesignHub,
   onRequireAuth 
 }) => {
+  const { success: toastSuccess, info: toastInfo } = useToast();
   const [articles, setArticles] = useState<Article[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Tất cả');
@@ -119,6 +123,7 @@ export const ArticleHub: React.FC<ArticleHubProps> = ({
     if (isAlready) {
       bookmarks = bookmarks.filter((b: any) => b.targetId !== art.id);
       setBookmarkedIds(prev => prev.filter(id => id !== art.id));
+      toastInfo('Đã bỏ lưu bài viết khỏi danh mục Yêu thích.', 'Bỏ lưu bài viết');
     } else {
       bookmarks.push({
         id: `bm-${Date.now()}`,
@@ -130,6 +135,7 @@ export const ArticleHub: React.FC<ArticleHubProps> = ({
         savedAt: new Date().toISOString().split('T')[0]
       });
       setBookmarkedIds(prev => [...prev, art.id]);
+      toastSuccess(`Đã lưu "${art.title}" vào danh sách Yêu thích của bạn!`, 'Đã lưu bài viết');
     }
 
     localStorage.setItem('ictc_bookmarks', JSON.stringify(bookmarks));
@@ -155,6 +161,7 @@ export const ArticleHub: React.FC<ArticleHubProps> = ({
     } else {
       updatedLikes = [...likedArticleIds, art.id];
       newLikesCount = (art.likesCount || 0) + 1;
+      toastSuccess(`Cảm ơn bạn đã thả tim cho bài viết "${art.title}"!`, 'Thả tim thành công');
     }
 
     setLikedArticleIds(updatedLikes);
@@ -172,6 +179,7 @@ export const ArticleHub: React.FC<ArticleHubProps> = ({
     const url = window.location.href;
     navigator.clipboard.writeText(url);
     setSharedToastId(art.id);
+    toastSuccess('Đã sao chép liên kết bài viết vào clipboard!', 'Chia sẻ bài viết');
     setTimeout(() => {
       setSharedToastId(null);
     }, 2500);
@@ -287,7 +295,23 @@ export const ArticleHub: React.FC<ArticleHubProps> = ({
       art.summary.toLowerCase().includes(searchTerm.toLowerCase()) ||
       art.tags.some(t => t.toLowerCase().includes(searchTerm.toLowerCase()));
 
-    return matchCategory && matchSearch;
+    let matchesSpecialty = true;
+    if (selectedSpecialty && selectedSpecialty !== 'all') {
+      const allText = `${art.title} ${art.summary} ${art.category} ${art.tags.join(' ')}`.toLowerCase();
+      if (selectedSpecialty === 'design') {
+        matchesSpecialty = art.category === 'Mẹo thiết kế' || /thiết kế|design|đồ họa|canva|powerpoint|slide|figma/i.test(allText);
+      } else if (selectedSpecialty === 'code') {
+        matchesSpecialty = art.category === 'Thủ thuật AI' || /lập trình|code|cntt|web|react|python|thuật toán|công nghệ/i.test(allText);
+      } else if (selectedSpecialty === 'research') {
+        matchesSpecialty = art.category === 'Nghiên cứu & Đồ án' || art.category === 'Kỹ năng thuyết trình' || /nghiên cứu|học thuật|đồ án|luận văn|tiểu luận|khoa học/i.test(allText);
+      } else if (selectedSpecialty === 'marketing') {
+        matchesSpecialty = /marketing|truyền thông|thương hiệu|quảng cáo|slogan|kế hoạch/i.test(allText);
+      } else if (selectedSpecialty === 'youth') {
+        matchesSpecialty = art.category === 'Thông báo & Sự kiện' || /đoàn|hội|thanh niên|tình nguyện|sinh viên|phong trào|sự kiện/i.test(allText);
+      }
+    }
+
+    return matchCategory && matchSearch && matchesSpecialty;
   });
 
   const featuredArticle = articles.find(a => a.isPinned && a.status === 'Published') || articles.find(a => a.status === 'Published') || articles[0];

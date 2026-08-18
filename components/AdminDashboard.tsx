@@ -24,6 +24,7 @@ import {
 } from '../lib/db';
 import { DesignEditorModal } from './DesignEditorModal';
 import { PromptEditorModal } from './PromptEditorModal';
+import { useToast } from '../context/ToastContext';
 
 interface AdminDashboardProps {
   currentUser: User;
@@ -33,6 +34,7 @@ type ModerationFilterType = 'all' | 'designs' | 'prompts' | 'articles';
 type ModerationStatusFilter = 'pending' | 'approved' | 'rejected';
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) => {
+  const { success: toastSuccess, info: toastInfo, warning: toastWarning } = useToast();
   const [activeSubTab, setActiveSubTab] = useState<'moderation' | 'reports' | 'articles' | 'fonts' | 'users' | 'security' | 'settings' | 'uploadResearch'>('moderation');
   
   // States loaded from LocalStorage
@@ -79,11 +81,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
   const [editingPrompt, setEditingPrompt] = useState<AIPrompt | null>(null);
 
   // Toast feedback
-  const [toastMsg, setToastMsg] = useState<string | null>(null);
-
   const showToast = (msg: string) => {
-    setToastMsg(msg);
-    setTimeout(() => setToastMsg(null), 3000);
+    toastSuccess(msg, 'Quản trị hệ thống');
   };
 
   // Load Admin Data
@@ -477,14 +476,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ currentUser }) =
 
   return (
     <div className="bg-white border border-slate-200/80 rounded-3xl overflow-hidden shadow-xl" id="admin-dashboard-root">
-      {/* Toast Notification */}
-      {toastMsg && (
-        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-2xl flex items-center space-x-2 text-xs font-bold animate-fade-in border border-slate-700">
-          <Check className="w-4 h-4 text-emerald-400" />
-          <span>{toastMsg}</span>
-        </div>
-      )}
-
       {/* Upper navigation header */}
       <div className="px-6 py-5 bg-slate-50 border-b border-slate-200/70 flex flex-col sm:flex-row items-center justify-between gap-4">
         <div className="flex items-center space-x-3">

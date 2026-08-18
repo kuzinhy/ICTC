@@ -7,6 +7,7 @@ import {
 import { User, DesignFile, AIPrompt } from '../types';
 import { UserAvatar, compressAndResizeImage } from './UserAvatar';
 import { saveUserToDb } from '../lib/db';
+import { useToast } from '../context/ToastContext';
 
 interface MemberProfileProps {
   currentUser: User;
@@ -21,6 +22,7 @@ export const MemberProfile: React.FC<MemberProfileProps> = ({
   onEditDesign,
   onEditPrompt
 }) => {
+  const { success: toastSuccess, error: toastError, info: toastInfo } = useToast();
   const [userFiles, setUserFiles] = useState<DesignFile[]>([]);
   const [userPrompts, setUserPrompts] = useState<AIPrompt[]>([]);
   const [contributionPoints, setContributionPoints] = useState(0);
@@ -33,8 +35,6 @@ export const MemberProfile: React.FC<MemberProfileProps> = ({
   const [bio, setBio] = useState(currentUser.bio || '');
   const [isSaving, setIsSaving] = useState(false);
   
-  // Notification toast
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -44,13 +44,6 @@ export const MemberProfile: React.FC<MemberProfileProps> = ({
     setPhoneNumber(currentUser.phoneNumber || '');
     setBio(currentUser.bio || '');
   }, [currentUser]);
-
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => {
-      setToastMessage(null);
-    }, 3000);
-  };
 
   useEffect(() => {
     // 1. Get user contributed designs
@@ -109,10 +102,10 @@ export const MemberProfile: React.FC<MemberProfileProps> = ({
         saveUserToDb(updatedUser).catch(console.warn);
       }
 
-      showToast('Đã cập nhật ảnh đại diện thành công!');
+      toastSuccess('Đã cập nhật ảnh đại diện thành công!', 'Ảnh đại diện');
     } catch (err) {
       console.error('Lỗi khi tải ảnh:', err);
-      alert('Không thể xử lý tệp ảnh này. Vui lòng thử lại với ảnh khác.');
+      toastError('Không thể xử lý tệp ảnh này. Vui lòng thử lại với ảnh khác.', 'Lỗi tải ảnh');
     } finally {
       setIsSaving(false);
     }
@@ -145,7 +138,7 @@ export const MemberProfile: React.FC<MemberProfileProps> = ({
         saveUserToDb(updatedUser).catch(console.warn);
       }
       setIsSaving(false);
-      showToast('Đã xóa ảnh đại diện!');
+      toastInfo('Đã gỡ ảnh đại diện và chuyển về mặc định.', 'Gỡ ảnh đại diện');
     }
   };
 
@@ -173,7 +166,7 @@ export const MemberProfile: React.FC<MemberProfileProps> = ({
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!displayName.trim()) {
-      alert('Vui lòng nhập họ và tên!');
+      toastError('Vui lòng nhập đầy đủ họ và tên!', 'Thiếu thông tin');
       return;
     }
 
@@ -194,10 +187,10 @@ export const MemberProfile: React.FC<MemberProfileProps> = ({
         await saveUserToDb(updatedUser);
       }
       setIsEditingProfile(false);
-      showToast('Đã lưu thông tin cá nhân thành công!');
+      toastSuccess('Đã lưu thông tin cá nhân thành công!', 'Hồ sơ thành viên');
     } catch (e) {
       console.warn('Lưu thông tin thất bại:', e);
-      showToast('Đã cập nhật thông tin trong phiên làm việc!');
+      toastSuccess('Đã cập nhật thông tin trong phiên làm việc!', 'Hồ sơ thành viên');
     } finally {
       setIsSaving(false);
     }
@@ -213,6 +206,7 @@ export const MemberProfile: React.FC<MemberProfileProps> = ({
           localStorage.setItem('ictc_design_files', JSON.stringify(updated));
           setUserFiles(userFiles.filter(f => f.id !== fileId));
           window.dispatchEvent(new Event('storage'));
+          toastInfo('Đã xóa bài đóng góp thiết kế.', 'Đã xóa');
         } catch (e) {}
       }
     }
@@ -228,6 +222,7 @@ export const MemberProfile: React.FC<MemberProfileProps> = ({
           localStorage.setItem('ictc_ai_prompts', JSON.stringify(updated));
           setUserPrompts(userPrompts.filter(p => p.id !== promptId));
           window.dispatchEvent(new Event('storage'));
+          toastInfo('Đã xóa bài đóng góp câu lệnh AI.', 'Đã xóa');
         } catch (e) {}
       }
     }
@@ -246,14 +241,6 @@ export const MemberProfile: React.FC<MemberProfileProps> = ({
   return (
     <div className="space-y-8 animate-fade-in relative" id="member-profile-root">
       
-      {/* Toast Notification */}
-      {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-xl flex items-center space-x-2.5 animate-slide-up border border-slate-700">
-          <CheckCircle className="w-5 h-5 text-emerald-400" />
-          <span className="text-xs font-bold">{toastMessage}</span>
-        </div>
-      )}
-
       {/* Hidden Global File Input for Avatar Upload */}
       <input
         ref={fileInputRef}
