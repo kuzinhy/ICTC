@@ -27,9 +27,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
   const [success, setSuccess] = useState(false);
   const [successUser, setSuccessUser] = useState<User | null>(null);
   const [error, setError] = useState('');
-  
-  const [showGoogleSelector, setShowGoogleSelector] = useState(false);
-  const [customGoogleEmail, setCustomGoogleEmail] = useState('');
 
   // 2FA Verification Step
   const [is2FAVerifying, setIs2FAVerifying] = useState(false);
@@ -141,55 +138,57 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
 
   const handleRealGoogleLogin = async () => {
     setError('');
-    
-    // If the user already typed an email into the input field, authenticate with it directly
-    if (email.trim() && email.includes('@')) {
-      handleGoogleLogin(email.trim());
-      return;
-    }
-
     setIsLoading(true);
+
     const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({
+      prompt: 'select_account'
+    });
+
     try {
       const result = await signInWithPopup(auth, provider);
-      const user = result.user;
-      if (user && user.email) {
-        handleGoogleLogin(user.email, user.displayName || undefined, user.photoURL || undefined);
-      } else {
+      const firebaseUser = result.user;
+
+      if (!firebaseUser || !firebaseUser.email) {
         setIsLoading(false);
+        setError('Không thể lấy địa chỉ email từ tài khoản Google. Vui lòng thử lại!');
+        return;
       }
-    } catch (e: any) {
-      console.warn("Direct popup blocked or unavailable, opening Google account entry view:", e);
+
+      processGoogleUserSuccess({
+        uid: firebaseUser.uid,
+        email: firebaseUser.email,
+        displayName: firebaseUser.displayName || firebaseUser.email.split('@')[0],
+        photoURL: firebaseUser.photoURL || undefined
+      });
+    } catch (err: any) {
+      console.error("Lỗi xác thực Google OAuth popup:", err);
       setIsLoading(false);
-      setError('');
-      setCustomGoogleEmail(email.trim() || 'nguyenhuy.thudaumot@gmail.com');
-      setShowGoogleSelector(true);
+
+      if (err.code === 'auth/popup-closed-by-user') {
+        setError('Bạn đã đóng cửa sổ xác thực Google trước khi hoàn tất.');
+      } else if (err.code === 'auth/popup-blocked') {
+        setError('Cửa sổ bật lên (popup) đăng nhập Google bị trình duyệt chặn. Vui lòng bật quyền cho phép popup và thử lại!');
+      } else if (err.code === 'auth/cancelled-popup-request') {
+        setError('Yêu cầu đăng nhập Google đã bị hủy.');
+      } else if (err.code === 'auth/unauthorized-domain') {
+        setError(`Tên miền hiện tại (${window.location.hostname}) chưa được cấp quyền trong Firebase Console -> Authentication -> Settings -> Authorized domains.`);
+      } else {
+        setError(`Xác thực Google thất bại (${err.code || 'Unknown Error'}). Vui lòng kiểm tra console hoặc thử lại sau!`);
+      }
     }
   };
 
-  const handleGoogleLogin = (selectedEmail: string, name?: string, photo?: string) => {
+  const processGoogleUserSuccess = (googleData: {
+    uid: string;
+    email: string;
+    displayName: string;
+    photoURL?: string;
+  }) => {
     setIsLoading(true);
-    // Determine role based on email
-    let role: 'Admin' | 'Creator' | 'Member' = 'Member';
-    let avatarUrl = photo || '';
-    let finalName = name || selectedEmail.split('@')[0];
+    const lowerEmail = googleData.email.toLowerCase();
 
-    const lowerEmail = selectedEmail.toLowerCase();
-    if (lowerEmail === 'nguyenhuy.thudaumot@gmail.com') {
-      role = 'Admin';
-      finalName = 'Nguyễn Huy';
-    }
-
-    const googleUser: User = {
-      id: `usr-google-${Date.now()}`,
-      email: selectedEmail,
-      displayName: finalName,
-      role: role,
-      avatarUrl: avatarUrl,
-      joinedDate: new Date().toISOString().split('T')[0]
-    };
-
-    // Save newly created or existing user in active registry
+    // Check saved users list from local storage or mock data
     const savedUsersStr = localStorage.getItem('ictc_registered_users');
     let savedUsers: User[] = [...INITIAL_USERS];
     if (savedUsersStr) {
@@ -197,28 +196,43 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
         savedUsers = JSON.parse(savedUsersStr) as User[];
       } catch (e) {}
     }
-    
-    if (!savedUsers.some(u => u.email.toLowerCase() === selectedEmail.toLowerCase())) {
-      savedUsers.push(googleUser);
-      localStorage.setItem('ictc_registered_users', JSON.stringify(savedUsers));
-    } else {
-      // Keep existing role if already registered
-      const existing = savedUsers.find(u => u.email.toLowerCase() === selectedEmail.toLowerCase());
-      if (existing) {
-        googleUser.role = existing.role;
-        googleUser.displayName = existing.displayName;
-        googleUser.avatarUrl = existing.avatarUrl || googleUser.avatarUrl;
-      }
+
+    const existingUser = savedUsers.find(u => u.email.toLowerCase() === lowerEmail);
+
+    let role: 'Admin' | 'Creator' | 'Member' = 'Member';
+    if (lowerEmail === 'nguyenhuy.thudaumot@gmail.com') {
+      role = 'Admin';
+    } else if (existingUser) {
+      role = existingUser.role;
     }
 
-    // Sync profile to Firebase Firestore securely
+    const finalName = lowerEmail === 'nguyenhuy.thudaumot@gmail.com' 
+      ? 'Nguyễn Huy' 
+      : (existingUser?.displayName || googleData.displayName);
+
+    const finalAvatar = googleData.photoURL || existingUser?.avatarUrl || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(finalName)}`;
+
+    const googleUser: User = {
+      id: googleData.uid || existingUser?.id || `usr-google-${Date.now()}`,
+      email: googleData.email,
+      displayName: finalName,
+      role: role,
+      avatarUrl: finalAvatar,
+      joinedDate: existingUser?.joinedDate || new Date().toISOString().split('T')[0]
+    };
+
+    // Save user in active user registry
+    const filteredUsers = savedUsers.filter(u => u.email.toLowerCase() !== lowerEmail);
+    const updatedUsers = [...filteredUsers, googleUser];
+    localStorage.setItem('ictc_registered_users', JSON.stringify(updatedUsers));
+
+    // Sync profile to Cloud Firestore securely
     saveUserToDb(googleUser)
       .catch(err => {
         console.warn("Failed to sync profile to Cloud Firestore:", err);
       })
       .finally(() => {
         setIsLoading(false);
-        setShowGoogleSelector(false);
         handleAuthSuccess(googleUser);
       });
   };
@@ -391,80 +405,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
             <div className="flex items-center space-x-2 text-slate-400 mt-6 text-xs font-semibold">
               <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
               <span>Đang đồng bộ và chuyển hướng...</span>
-            </div>
-          </div>
-        )}
-
-        {/* Google Account Selector Overlay */}
-        {showGoogleSelector && (
-          <div className="absolute inset-0 bg-white z-20 flex flex-col p-6 animate-fade-in">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
-              <div className="flex items-center space-x-2.5">
-                <div className="p-1.5 bg-blue-50 rounded-lg">
-                  <svg className="w-5 h-5" viewBox="0 0 24 24">
-                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l3.66-2.85z" />
-                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.85c.87-2.6 3.3-4.53 6.16-4.53z" />
-                  </svg>
-                </div>
-                <span className="text-xs font-black text-slate-800 uppercase tracking-widest">Đăng nhập bằng Google</span>
-              </div>
-              <button 
-                onClick={() => setShowGoogleSelector(false)}
-                className="p-1.5 hover:bg-slate-100 text-slate-400 hover:text-slate-600 rounded-full transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="flex-1 flex flex-col justify-between py-6">
-              <div className="space-y-6">
-                <div className="text-center space-y-1.5">
-                  <h4 className="text-lg font-black text-slate-900 tracking-tight">Đăng nhập tài khoản Google</h4>
-                  <p className="text-xs text-slate-400 leading-relaxed max-w-[320px] mx-auto">
-                    Xác nhận tài khoản Gmail của bạn để truy cập ngay vào hệ thống ICTC Share & Design:
-                  </p>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Địa chỉ Gmail</label>
-                    <div className="relative">
-                      <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 w-4.5 h-4.5" />
-                      <input
-                        type="email"
-                        autoFocus
-                        placeholder="nguyenhuy.thudaumot@gmail.com"
-                        value={customGoogleEmail}
-                        onChange={(e) => setCustomGoogleEmail(e.target.value)}
-                        className="w-full bg-slate-50 text-slate-950 font-bold text-sm pl-11 pr-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 focus:bg-white placeholder-slate-400 transition-all duration-150"
-                      />
-                    </div>
-                  </div>
-                  
-                  <button
-                    onClick={() => {
-                      if (customGoogleEmail.trim().includes('@')) {
-                        handleGoogleLogin(customGoogleEmail.trim());
-                      } else {
-                        setError('Vui lòng nhập địa chỉ Gmail hợp lệ!');
-                      }
-                    }}
-                    className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all duration-200 shadow-lg shadow-blue-500/10 flex items-center justify-center space-x-2"
-                  >
-                    <span>Tiếp tục với Google</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-
-              <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 flex items-start space-x-2.5">
-                <Info className="w-4.5 h-4.5 text-blue-500 flex-shrink-0 mt-0.5" />
-                <p className="text-[10px] text-slate-500 leading-normal">
-                  Hệ thống tự động kích hoạt vai trò <span className="font-bold text-rose-600">Quản trị viên (Admin)</span> cho email quản lý <span className="font-bold text-slate-700">nguyenhuy.thudaumot@gmail.com</span>.
-                </p>
-              </div>
             </div>
           </div>
         )}
