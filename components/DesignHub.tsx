@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Search, Download, Star, Tag, FileText, X, Edit, Trash2,
   UploadCloud, Check, ExternalLink, Calendar, User, Eye, Sparkles,
@@ -286,36 +286,38 @@ export const DesignHub: React.FC<DesignHubProps> = ({ currentUser, selectedSpeci
   ];
 
   // Filtering: Public visitors see approved files; Admins see all; Members see approved + their own pending/rejected items
-  const filteredFiles = files.filter(f => {
-    const isOwner = currentUser && (f.authorId === currentUser.id || f.author === currentUser.displayName);
-    const canView = f.status === 'Approved' || currentUser?.role === 'Admin' || isOwner;
-    if (!canView) return false;
-    
-    const matchesSearch = searchTerm === '' || 
-      f.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      f.tags.some(t => t.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      f.description.toLowerCase().includes(searchTerm.toLowerCase());
+  const filteredFiles = useMemo(() => {
+    return files.filter(f => {
+      const isOwner = currentUser && (f.authorId === currentUser.id || f.author === currentUser.displayName);
+      const canView = f.status === 'Approved' || currentUser?.role === 'Admin' || isOwner;
+      if (!canView) return false;
       
-    const matchesCategory = selectedCategory === 'All' || f.category === selectedCategory;
+      const matchesSearch = searchTerm === '' || 
+        f.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        f.tags.some(t => t.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        f.description.toLowerCase().includes(searchTerm.toLowerCase());
+        
+      const matchesCategory = selectedCategory === 'All' || f.category === selectedCategory;
 
-    let matchesSpecialty = true;
-    if (selectedSpecialty && selectedSpecialty !== 'all') {
-      const allText = `${f.title} ${f.description} ${f.category} ${f.tags.join(' ')}`.toLowerCase();
-      if (selectedSpecialty === 'design') {
-        matchesSpecialty = f.category === 'UI/UX Kits' || f.category === 'PowerPoint Templates' || f.category === 'Poster & Infographics' || f.category === 'Canva Templates' || /thiết kế|design|đồ họa|poster|banner|canva|figma|photoshop|vector|typography|slide/i.test(allText);
-      } else if (selectedSpecialty === 'code') {
-        matchesSpecialty = f.category === 'UI/UX Kits' || /lập trình|code|dev|cntt|web|react|python|html|css|it|khoa học máy tính|frontend|backend|database/i.test(allText);
-      } else if (selectedSpecialty === 'research') {
-        matchesSpecialty = f.category === 'Research Documents' || f.category === 'PowerPoint Templates' || /nghiên cứu|học thuật|báo cáo|tiểu luận|luận văn|khoa học|research|hội thảo|academic/i.test(allText);
-      } else if (selectedSpecialty === 'marketing') {
-        matchesSpecialty = /marketing|kinh tế|thương mại|quảng cáo|truyền thông|sale|pitch|kinh doanh|tài chính|kế hoạch/i.test(allText) || f.category === 'Poster & Infographics' || f.category === 'PowerPoint Templates';
-      } else if (selectedSpecialty === 'youth') {
-        matchesSpecialty = /đoàn|hội|thanh niên|tình nguyện|sinh viên|phong trào|hội nghị|đại hội|mùa hè xanh|tiếp sức/i.test(allText) || f.category === 'Poster & Infographics';
+      let matchesSpecialty = true;
+      if (selectedSpecialty && selectedSpecialty !== 'all') {
+        const allText = `${f.title} ${f.description} ${f.category} ${f.tags.join(' ')}`.toLowerCase();
+        if (selectedSpecialty === 'design') {
+          matchesSpecialty = f.category === 'UI/UX Kits' || f.category === 'PowerPoint Templates' || f.category === 'Poster & Infographics' || f.category === 'Canva Templates' || /thiết kế|design|đồ họa|poster|banner|canva|figma|photoshop|vector|typography|slide/i.test(allText);
+        } else if (selectedSpecialty === 'code') {
+          matchesSpecialty = f.category === 'UI/UX Kits' || /lập trình|code|dev|cntt|web|react|python|html|css|it|khoa học máy tính|frontend|backend|database/i.test(allText);
+        } else if (selectedSpecialty === 'research') {
+          matchesSpecialty = f.category === 'Research Documents' || f.category === 'PowerPoint Templates' || /nghiên cứu|học thuật|báo cáo|tiểu luận|luận văn|khoa học|research|hội thảo|academic/i.test(allText);
+        } else if (selectedSpecialty === 'marketing') {
+          matchesSpecialty = /marketing|kinh tế|thương mại|quảng cáo|truyền thông|sale|pitch|kinh doanh|tài chính|kế hoạch/i.test(allText) || f.category === 'Poster & Infographics' || f.category === 'PowerPoint Templates';
+        } else if (selectedSpecialty === 'youth') {
+          matchesSpecialty = /đo đoàn|hội|thanh niên|tình nguyện|sinh viên|phong trào|hội nghị|đại hội|mùa hè xanh|tiếp sức/i.test(allText) || f.category === 'Poster & Infographics';
+        }
       }
-    }
 
-    return matchesSearch && matchesCategory && matchesSpecialty;
-  });
+      return matchesSearch && matchesCategory && matchesSpecialty;
+    });
+  }, [files, searchTerm, selectedCategory, selectedSpecialty, currentUser]);
 
   return (
     <div className="space-y-8" id="design-hub-root">
@@ -339,15 +341,8 @@ export const DesignHub: React.FC<DesignHubProps> = ({ currentUser, selectedSpeci
         </div>
         <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto shrink-0">
           <button
-            onClick={handleOpenDriveFolder}
-            className="flex items-center justify-center px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl transition-all duration-200 shadow-md shadow-blue-500/10 hover:shadow-blue-500/20 active:scale-95"
-          >
-            {currentUser ? 'Mở Google Drive' : 'Đăng nhập mở Drive'}
-            {currentUser ? <ExternalLink className="w-4 h-4 ml-2" /> : <Lock className="w-4 h-4 ml-2" />}
-          </button>
-          <button
             onClick={handleOpenUploadModal}
-            className="flex items-center justify-center px-6 py-3 bg-white hover:bg-slate-50 text-blue-600 border border-blue-200 hover:border-blue-300 font-bold text-sm rounded-xl transition-all duration-200 shadow-sm active:scale-95"
+            className="flex items-center justify-center px-6 py-3 bg-white hover:bg-slate-50 text-blue-600 border border-blue-200 hover:border-blue-300 font-bold text-sm rounded-xl transition-all duration-200 shadow-sm active:scale-95 w-full sm:w-auto"
           >
             Đóng góp tài liệu
             <UploadCloud className="w-4 h-4 ml-2" />

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Search, BookOpen, Clock, Eye, Heart, Share2, Plus, 
   Sparkles, Filter, Bookmark, BookmarkCheck, ArrowRight, 
@@ -280,39 +280,41 @@ export const ArticleHub: React.FC<ArticleHubProps> = ({
   };
 
   // Filtering
-  const filteredArticles = articles.filter(art => {
-    // Determine visibility:
-    // 1. Published articles are visible to everyone
-    // 2. Admins can view all articles (Published, Pending, Rejected)
-    // 3. Members can view their own pending/rejected articles
-    const isOwner = currentUser && (art.authorId === currentUser.id || art.author === currentUser.displayName);
-    const canView = art.status === 'Published' || currentUser?.role === 'Admin' || isOwner;
-    if (!canView) return false;
+  const filteredArticles = useMemo(() => {
+    return articles.filter(art => {
+      // Determine visibility:
+      // 1. Published articles are visible to everyone
+      // 2. Admins can view all articles (Published, Pending, Rejected)
+      // 3. Members can view their own pending/rejected articles
+      const isOwner = currentUser && (art.authorId === currentUser.id || art.author === currentUser.displayName);
+      const canView = art.status === 'Published' || currentUser?.role === 'Admin' || isOwner;
+      if (!canView) return false;
 
-    const matchCategory = selectedCategory === 'Tất cả' || art.category === selectedCategory;
-    const matchSearch = searchTerm === '' || 
-      art.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      art.summary.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      art.tags.some(t => t.toLowerCase().includes(searchTerm.toLowerCase()));
+      const matchCategory = selectedCategory === 'Tất cả' || art.category === selectedCategory;
+      const matchSearch = searchTerm === '' || 
+        art.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        art.summary.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        art.tags.some(t => t.toLowerCase().includes(searchTerm.toLowerCase()));
 
-    let matchesSpecialty = true;
-    if (selectedSpecialty && selectedSpecialty !== 'all') {
-      const allText = `${art.title} ${art.summary} ${art.category} ${art.tags.join(' ')}`.toLowerCase();
-      if (selectedSpecialty === 'design') {
-        matchesSpecialty = art.category === 'Mẹo thiết kế' || /thiết kế|design|đồ họa|canva|powerpoint|slide|figma/i.test(allText);
-      } else if (selectedSpecialty === 'code') {
-        matchesSpecialty = art.category === 'Thủ thuật AI' || /lập trình|code|cntt|web|react|python|thuật toán|công nghệ/i.test(allText);
-      } else if (selectedSpecialty === 'research') {
-        matchesSpecialty = art.category === 'Nghiên cứu & Đồ án' || art.category === 'Kỹ năng thuyết trình' || /nghiên cứu|học thuật|đồ án|luận văn|tiểu luận|khoa học/i.test(allText);
-      } else if (selectedSpecialty === 'marketing') {
-        matchesSpecialty = /marketing|truyền thông|thương hiệu|quảng cáo|slogan|kế hoạch/i.test(allText);
-      } else if (selectedSpecialty === 'youth') {
-        matchesSpecialty = art.category === 'Thông báo & Sự kiện' || /đoàn|hội|thanh niên|tình nguyện|sinh viên|phong trào|sự kiện/i.test(allText);
+      let matchesSpecialty = true;
+      if (selectedSpecialty && selectedSpecialty !== 'all') {
+        const allText = `${art.title} ${art.summary} ${art.category} ${art.tags.join(' ')}`.toLowerCase();
+        if (selectedSpecialty === 'design') {
+          matchesSpecialty = art.category === 'Mẹo thiết kế' || /thiết kế|design|đồ họa|canva|powerpoint|slide|figma/i.test(allText);
+        } else if (selectedSpecialty === 'code') {
+          matchesSpecialty = art.category === 'Thủ thuật AI' || /lập trình|code|cntt|web|react|python|thuật toán|công nghệ/i.test(allText);
+        } else if (selectedSpecialty === 'research') {
+          matchesSpecialty = art.category === 'Nghiên cứu & Đồ án' || art.category === 'Kỹ năng thuyết trình' || /nghiên cứu|học thuật|đồ án|luận văn|tiểu luận|khoa học/i.test(allText);
+        } else if (selectedSpecialty === 'marketing') {
+          matchesSpecialty = /marketing|truyền thông|thương hiệu|quảng cáo|slogan|kế hoạch/i.test(allText);
+        } else if (selectedSpecialty === 'youth') {
+          matchesSpecialty = art.category === 'Thông báo & Sự kiện' || /đoàn|hội|thanh niên|tình nguyện|sinh viên|phong trào|sự kiện/i.test(allText);
+        }
       }
-    }
 
-    return matchCategory && matchSearch && matchesSpecialty;
-  });
+      return matchCategory && matchSearch && matchesSpecialty;
+    });
+  }, [articles, searchTerm, selectedCategory, selectedSpecialty, currentUser]);
 
   const featuredArticle = articles.find(a => a.isPinned && a.status === 'Published') || articles.find(a => a.status === 'Published') || articles[0];
 

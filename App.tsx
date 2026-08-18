@@ -56,175 +56,99 @@ const App: React.FC = () => {
   const [systemConfig, setSystemConfig] = useState<SystemConfig>(DEFAULT_SYSTEM_CONFIG);
 
   // Global data caches for Search and NewsTicker
-  const [articles, setArticles] = useState<Article[]>(INITIAL_ARTICLES);
-  const [designFiles, setDesignFiles] = useState<DesignFile[]>(INITIAL_DESIGN_FILES);
-  const [aiPrompts, setAiPrompts] = useState<AIPrompt[]>(INITIAL_AI_PROMPTS);
+  const [articles, setArticles] = useState<Article[]>([]);
+  const [designFiles, setDesignFiles] = useState<DesignFile[]>([]);
+  const [aiPrompts, setAiPrompts] = useState<AIPrompt[]>([]);
 
-  // Global modals
-  const [selectedArticleForReading, setSelectedArticleForReading] = useState<Article | null>(null);
-  const [isCommandSearchOpen, setIsCommandSearchOpen] = useState(false);
-  const [isPaletteOpen, setIsPaletteOpen] = useState(false);
-  const [isLegalOpen, setIsLegalOpen] = useState(false);
-  const [legalTab, setLegalTab] = useState<'ip_policy' | 'community_rules' | 'ai_ethics' | 'dmca_takedown'>('ip_policy');
-
-  // Listen for Ctrl+K or Cmd+K
+  // Consolidate data initialization and sync
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault();
-        setIsCommandSearchOpen(prev => !prev);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+    const initializeData = async () => {
+      // 1. Initial local state from storage or mock
+      const getLocal = (key: string, fallback: any) => {
+        const saved = localStorage.getItem(key);
+        if (!saved) return fallback;
+        try { return JSON.parse(saved); } catch (e) { return fallback; }
+      };
 
-  // Close specialty dropdown on outside click
-  useEffect(() => {
-    const handleOutsideClick = (e: MouseEvent | TouchEvent) => {
-      if (specialtyDropdownRef.current && !specialtyDropdownRef.current.contains(e.target as Node)) {
-        setIsSpecialtyDropdownOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleOutsideClick);
-    document.addEventListener('touchstart', handleOutsideClick);
-    return () => {
-      document.removeEventListener('mousedown', handleOutsideClick);
-      document.removeEventListener('touchstart', handleOutsideClick);
-    };
-  }, []);
+      setSystemConfig(getLocal('ictc_system_config', DEFAULT_SYSTEM_CONFIG));
+      setDesignFiles(getLocal('ictc_design_files', INITIAL_DESIGN_FILES));
+      setAiPrompts(getLocal('ictc_ai_prompts', INITIAL_AI_PROMPTS));
+      setArticles(getLocal('ictc_articles', INITIAL_ARTICLES));
 
-  // Initialize and seed local storage with default database schemas
-  useEffect(() => {
-    // 1. Check offline fallback setup first
-    const savedConfig = localStorage.getItem('ictc_system_config');
-    if (!savedConfig) {
-      localStorage.setItem('ictc_system_config', JSON.stringify(DEFAULT_SYSTEM_CONFIG));
-      setSystemConfig(DEFAULT_SYSTEM_CONFIG);
-    } else {
-      try { setSystemConfig(JSON.parse(savedConfig)); } catch (e) {}
-    }
-
-    const savedUsers = localStorage.getItem('ictc_registered_users');
-    if (!savedUsers) {
-      localStorage.setItem('ictc_registered_users', JSON.stringify(INITIAL_USERS));
-    } else {
+      // 2. Fetch fresh data from Cloud
       try {
-        let parsed: User[] = JSON.parse(savedUsers);
-        parsed = parsed.filter(u => !['admin@ictc.io.vn', 'huy.design@ictc.io.vn', 'member@ictc.io.vn'].includes(u.email.toLowerCase()));
-        parsed = parsed.map(u => {
-          if (u.email.toLowerCase() === 'nguyenhuy.thudaumot@gmail.com' && u.avatarUrl?.includes('unsplash.com')) {
-            return { ...u, avatarUrl: '' };
-          }
-          return u;
-        });
-        if (parsed.length === 0) {
-          parsed = INITIAL_USERS;
+        const [config, designs, prompts, arts] = await Promise.all([
+          fetchSystemConfig(),
+          fetchDesignsFromDb(),
+          fetchPromptsFromDb(),
+          fetchArticlesFromDb()
+        ]);
+
+        if (config) {
+          setSystemConfig(config);
+          localStorage.setItem('ictc_system_config', JSON.stringify(config));
         }
-        localStorage.setItem('ictc_registered_users', JSON.stringify(parsed));
-      } catch (e) {}
-    }
-
-    const savedDesigns = localStorage.getItem('ictc_design_files');
-    if (savedDesigns) {
-      try { setDesignFiles(JSON.parse(savedDesigns)); } catch (e) {}
-    } else {
-      localStorage.setItem('ictc_design_files', JSON.stringify(INITIAL_DESIGN_FILES));
-      setDesignFiles(INITIAL_DESIGN_FILES);
-    }
-
-    const savedPrompts = localStorage.getItem('ictc_ai_prompts');
-    if (savedPrompts) {
-      try { setAiPrompts(JSON.parse(savedPrompts)); } catch (e) {}
-    } else {
-      localStorage.setItem('ictc_ai_prompts', JSON.stringify(INITIAL_AI_PROMPTS));
-      setAiPrompts(INITIAL_AI_PROMPTS);
-    }
-
-    const savedArticles = localStorage.getItem('ictc_articles');
-    if (savedArticles) {
-      try { setArticles(JSON.parse(savedArticles)); } catch (e) {}
-    } else {
-      localStorage.setItem('ictc_articles', JSON.stringify(INITIAL_ARTICLES));
-      setArticles(INITIAL_ARTICLES);
-    }
-
-    // 2. Test connection & load real-time Firestore configs
-    testFirestoreConnection();
-
-    const syncCloudData = async () => {
-      try {
-        const config = await fetchSystemConfig();
-        setSystemConfig(config);
-        localStorage.setItem('ictc_system_config', JSON.stringify(config));
-
-        const designs = await fetchDesignsFromDb();
-        setDesignFiles(designs);
-        localStorage.setItem('ictc_design_files', JSON.stringify(designs));
-
-        const prompts = await fetchPromptsFromDb();
-        setAiPrompts(prompts);
-        localStorage.setItem('ictc_ai_prompts', JSON.stringify(prompts));
-
-        const arts = await fetchArticlesFromDb();
-        setArticles(arts);
-        localStorage.setItem('ictc_articles', JSON.stringify(arts));
-
-        if (auth.currentUser) {
-          const users = await fetchUsersFromDb();
-          localStorage.setItem('ictc_registered_users', JSON.stringify(users));
+        if (designs?.length) {
+          setDesignFiles(designs);
+          localStorage.setItem('ictc_design_files', JSON.stringify(designs));
+        }
+        if (prompts?.length) {
+          setAiPrompts(prompts);
+          localStorage.setItem('ictc_ai_prompts', JSON.stringify(prompts));
+        }
+        if (arts?.length) {
+          setArticles(arts);
+          localStorage.setItem('ictc_articles', JSON.stringify(arts));
         }
       } catch (e) {
-        console.warn("Cloud sync fallback to local storage:", e);
+        console.warn("Cloud sync failed, using local/mock data:", e);
       }
     };
 
-    syncCloudData();
+    initializeData();
 
-    // 3. Listen to real Firebase Authentication status
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+    // Listen to real Firebase Authentication status
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser && firebaseUser.email) {
-        const localUsers = localStorage.getItem('ictc_registered_users');
-        let registeredUsers = INITIAL_USERS;
-        if (localUsers) {
-          try { registeredUsers = JSON.parse(localUsers); } catch (err) {}
-        }
-
-        let foundUser = registeredUsers.find(u => u.email.toLowerCase() === firebaseUser.email?.toLowerCase());
-        if (!foundUser) {
-          let role: 'Admin' | 'Creator' | 'Member' = 'Member';
-          if (firebaseUser.email.toLowerCase() === 'nguyenhuy.thudaumot@gmail.com') {
-            role = 'Admin';
-          }
-          foundUser = {
-            id: firebaseUser.uid,
-            email: firebaseUser.email,
-            displayName: firebaseUser.displayName || firebaseUser.email.split('@')[0],
-            role: role,
-            avatarUrl: firebaseUser.photoURL || `https://api.dicebear.com/7.x/pixel-art/svg?seed=${firebaseUser.email}`,
-            joinedDate: new Date().toISOString().split('T')[0]
-          };
-
-          registeredUsers.push(foundUser);
-          localStorage.setItem('ictc_registered_users', JSON.stringify(registeredUsers));
+        try {
+          const allUsers = await fetchUsersFromDb();
+          let foundUser = allUsers.find(u => u.email.toLowerCase() === firebaseUser.email?.toLowerCase());
           
-          saveUserToDb(foundUser).catch(err => {
-            console.warn("Could not write profile to Firebase Firestore:", err);
-          });
-        }
+          if (!foundUser) {
+            // New user registration
+            const role: 'Admin' | 'Creator' | 'Member' = 
+              firebaseUser.email.toLowerCase() === 'nguyenhuy.thudaumot@gmail.com' ? 'Admin' : 'Member';
+            
+            foundUser = {
+              id: firebaseUser.uid,
+              email: firebaseUser.email,
+              displayName: firebaseUser.displayName || firebaseUser.email.split('@')[0],
+              role,
+              avatarUrl: firebaseUser.photoURL || `https://api.dicebear.com/7.x/pixel-art/svg?seed=${firebaseUser.email}`,
+              joinedDate: new Date().toISOString().split('T')[0]
+            };
 
-        setCurrentUser(foundUser);
-        localStorage.setItem('ictc_logged_in_user', JSON.stringify(foundUser));
-      } else {
-        const savedSession = localStorage.getItem('ictc_logged_in_user');
-        if (savedSession) {
-          try { setCurrentUser(JSON.parse(savedSession)); } catch (err) {}
+            await saveUserToDb(foundUser);
+          }
+
+          setCurrentUser(foundUser);
+          localStorage.setItem('ictc_logged_in_user', JSON.stringify(foundUser));
+        } catch (err) {
+          console.warn("Error syncing user with Firestore:", err);
+          // Fallback to local
+          const savedSession = localStorage.getItem('ictc_logged_in_user');
+          if (savedSession) {
+            try { setCurrentUser(JSON.parse(savedSession)); } catch (e) {}
+          }
         }
+      } else {
+        setCurrentUser(null);
+        localStorage.removeItem('ictc_logged_in_user');
       }
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [toastSuccess, toastInfo]);
 
   const handleLoginSuccess = (user: User) => {
     setCurrentUser(user);
@@ -263,6 +187,40 @@ const App: React.FC = () => {
     }
     toastInfo('Bạn đã đăng xuất tài khoản an toàn khỏi hệ thống.', 'Đã đăng xuất');
   };
+
+  // Global modals
+  const [selectedArticleForReading, setSelectedArticleForReading] = useState<Article | null>(null);
+  const [isCommandSearchOpen, setIsCommandSearchOpen] = useState(false);
+  const [isPaletteOpen, setIsPaletteOpen] = useState(false);
+  const [isLegalOpen, setIsLegalOpen] = useState(false);
+  const [legalTab, setLegalTab] = useState<'ip_policy' | 'community_rules' | 'ai_ethics' | 'dmca_takedown'>('ip_policy');
+
+  // Listen for Ctrl+K or Cmd+K
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsCommandSearchOpen(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // Close specialty dropdown on outside click
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent | TouchEvent) => {
+      if (specialtyDropdownRef.current && !specialtyDropdownRef.current.contains(e.target as Node)) {
+        setIsSpecialtyDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    document.addEventListener('touchstart', handleOutsideClick);
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+      document.removeEventListener('touchstart', handleOutsideClick);
+    };
+  }, []);
 
   const handleRequireAuth = (reason?: string) => {
     setAuthReason(reason || 'Vui lòng đăng nhập hoặc tạo tài khoản thành viên để tiếp tục!');
@@ -409,66 +367,66 @@ const App: React.FC = () => {
           <div className="max-w-6xl mx-auto my-6" id="primary-tab-switcher">
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
               {/* Tab Navigation Buttons */}
-              <div className="flex-1 bg-white p-1.5 rounded-2xl border border-slate-200/80 shadow-md flex overflow-x-auto no-scrollbar gap-1 scroll-smooth">
+              <div className="flex-1 bg-white p-1 rounded-xl border border-slate-200/80 shadow-sm flex overflow-x-auto no-scrollbar gap-0.5 scroll-smooth">
                 <button
                   onClick={() => setActiveTab('designs')}
-                  className={`flex-1 flex items-center justify-center space-x-2 py-3 px-3.5 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 whitespace-nowrap shrink-0 sm:shrink ${
+                  className={`flex-1 flex items-center justify-center space-x-1.5 py-2 px-2.5 rounded-lg text-[11px] sm:text-xs font-bold transition-all duration-200 whitespace-nowrap shrink-0 sm:shrink ${
                     activeTab === 'designs'
-                      ? 'bg-blue-600 text-white shadow-md shadow-blue-500/10'
+                      ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/10'
                       : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
                   }`}
                 >
-                  <FolderOpen className="w-4 h-4" />
+                  <FolderOpen className="w-3.5 h-3.5" />
                   <span>Thư viện Thiết kế</span>
                 </button>
 
                 <button
                   onClick={() => setActiveTab('prompts')}
-                  className={`flex-1 flex items-center justify-center space-x-2 py-3 px-3.5 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 whitespace-nowrap shrink-0 sm:shrink ${
+                  className={`flex-1 flex items-center justify-center space-x-1.5 py-2 px-2.5 rounded-lg text-[11px] sm:text-xs font-bold transition-all duration-200 whitespace-nowrap shrink-0 sm:shrink ${
                     activeTab === 'prompts'
-                      ? 'bg-blue-600 text-white shadow-md shadow-blue-500/10'
+                      ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/10'
                       : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
                   }`}
                 >
-                  <Sparkles className="w-4 h-4" />
+                  <Sparkles className="w-3.5 h-3.5" />
                   <span>Kho AI Prompts</span>
                 </button>
 
                 {/* Bài viết mới tab */}
                 <button
                   onClick={() => setActiveTab('articles')}
-                  className={`flex-1 flex items-center justify-center space-x-2 py-3 px-3.5 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 whitespace-nowrap shrink-0 sm:shrink ${
+                  className={`flex-1 flex items-center justify-center space-x-1.5 py-2 px-2.5 rounded-lg text-[11px] sm:text-xs font-bold transition-all duration-200 whitespace-nowrap shrink-0 sm:shrink ${
                     activeTab === 'articles'
-                      ? 'bg-blue-600 text-white shadow-md shadow-blue-500/10'
+                      ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/10'
                       : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
                   }`}
                 >
-                  <BookOpen className="w-4 h-4" />
+                  <BookOpen className="w-3.5 h-3.5" />
                   <span>Bài viết & Tin tức</span>
                 </button>
 
                 {/* Font Việt hóa tab */}
                 <button
                   onClick={() => setActiveTab('fonts')}
-                  className={`flex-1 flex items-center justify-center space-x-2 py-3 px-3.5 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 whitespace-nowrap shrink-0 sm:shrink ${
+                  className={`flex-1 flex items-center justify-center space-x-1.5 py-2 px-2.5 rounded-lg text-[11px] sm:text-xs font-bold transition-all duration-200 whitespace-nowrap shrink-0 sm:shrink ${
                     activeTab === 'fonts'
-                      ? 'bg-blue-600 text-white shadow-md shadow-blue-500/10'
+                      ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/10'
                       : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
                   }`}
                 >
-                  <Type className="w-4 h-4" />
+                  <Type className="w-3.5 h-3.5" />
                   <span>Font Việt hóa</span>
                 </button>
 
                 <button
                   onClick={() => setActiveTab('contact')}
-                  className={`flex-1 flex items-center justify-center space-x-2 py-3 px-3.5 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 whitespace-nowrap shrink-0 sm:shrink ${
+                  className={`flex-1 flex items-center justify-center space-x-1.5 py-2 px-2.5 rounded-lg text-[11px] sm:text-xs font-bold transition-all duration-200 whitespace-nowrap shrink-0 sm:shrink ${
                     activeTab === 'contact'
-                      ? 'bg-blue-600 text-white shadow-md shadow-blue-500/10'
+                      ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/10'
                       : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
                   }`}
                 >
-                  <MessageCircle className="w-4 h-4" />
+                  <MessageCircle className="w-3.5 h-3.5" />
                   <span>Liên hệ</span>
                 </button>
 
@@ -476,13 +434,13 @@ const App: React.FC = () => {
                 {currentUser && (
                   <button
                     onClick={() => setActiveTab('profile')}
-                    className={`flex-1 flex items-center justify-center space-x-2 py-3 px-3.5 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 whitespace-nowrap shrink-0 sm:shrink ${
+                    className={`flex-1 flex items-center justify-center space-x-1.5 py-2 px-2.5 rounded-lg text-[11px] sm:text-xs font-bold transition-all duration-200 whitespace-nowrap shrink-0 sm:shrink ${
                       activeTab === 'profile'
-                        ? 'bg-blue-600 text-white shadow-md shadow-blue-500/10'
+                        ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/10'
                         : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
                     }`}
                   >
-                    <UserIcon className="w-4 h-4" />
+                    <UserIcon className="w-3.5 h-3.5" />
                     <span>Hồ sơ</span>
                   </button>
                 )}
@@ -491,13 +449,13 @@ const App: React.FC = () => {
                 {currentUser && currentUser.role === 'Admin' && (
                   <button
                     onClick={() => setActiveTab('admin')}
-                    className={`flex-1 flex items-center justify-center space-x-2 py-3 px-3.5 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 whitespace-nowrap shrink-0 sm:shrink ${
+                    className={`flex-1 flex items-center justify-center space-x-1.5 py-2 px-2.5 rounded-lg text-[11px] sm:text-xs font-bold transition-all duration-200 whitespace-nowrap shrink-0 sm:shrink ${
                       activeTab === 'admin'
-                        ? 'bg-purple-600 text-white shadow-md shadow-purple-500/10'
+                        ? 'bg-purple-600 text-white shadow-sm shadow-purple-500/10'
                         : 'text-purple-600 hover:text-purple-700 bg-purple-50 hover:bg-purple-100/70 border border-purple-200/50'
                     }`}
                   >
-                    <Shield className="w-4 h-4" />
+                    <Shield className="w-3.5 h-3.5" />
                     <span>Quản trị</span>
                   </button>
                 )}
@@ -508,25 +466,25 @@ const App: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setIsSpecialtyDropdownOpen(!isSpecialtyDropdownOpen)}
-                  className={`w-full sm:w-auto flex items-center justify-between sm:justify-center space-x-2 py-3 px-4 rounded-2xl border text-xs sm:text-sm font-bold transition-all duration-200 shadow-md active:scale-95 cursor-pointer ${
+                  className={`w-full sm:w-auto flex items-center justify-between sm:justify-center space-x-1.5 py-2 px-3 rounded-xl border text-[11px] sm:text-xs font-bold transition-all duration-200 shadow-sm active:scale-95 cursor-pointer ${
                     selectedSpecialty !== 'all'
-                      ? 'bg-blue-50 text-blue-700 border-blue-300 ring-2 ring-blue-500/20'
+                      ? 'bg-blue-50 text-blue-700 border-blue-300 ring-1 ring-blue-500/20'
                       : 'bg-white text-slate-700 hover:text-slate-900 hover:bg-slate-50 border-slate-200/80'
                   }`}
                   id="specialty-dropdown-trigger"
                   aria-label="Lọc nhanh chuyên ngành"
                   title="Lọc nhanh nội dung hiển thị theo chuyên ngành"
                 >
-                  <div className="flex items-center space-x-2">
-                    <Filter className={`w-4 h-4 ${selectedSpecialty !== 'all' ? 'text-blue-600' : 'text-slate-500'}`} />
-                    <span className="truncate max-w-[130px] md:max-w-[160px]">
+                  <div className="flex items-center space-x-1.5">
+                    <Filter className={`w-3.5 h-3.5 ${selectedSpecialty !== 'all' ? 'text-blue-600' : 'text-slate-500'}`} />
+                    <span className="truncate max-w-[100px] md:max-w-[140px]">
                       {SPECIALTY_OPTIONS.find(s => s.id === selectedSpecialty)?.label || 'Chuyên ngành'}
                     </span>
                     {selectedSpecialty !== 'all' && (
-                      <span className="w-2 h-2 rounded-full bg-blue-600"></span>
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-600"></span>
                     )}
                   </div>
-                  <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 shrink-0 ${isSpecialtyDropdownOpen ? 'rotate-180 text-blue-600' : ''}`} />
+                  <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 shrink-0 ${isSpecialtyDropdownOpen ? 'rotate-180 text-blue-600' : ''}`} />
                 </button>
 
                 {/* Dropdown Popover Menu */}

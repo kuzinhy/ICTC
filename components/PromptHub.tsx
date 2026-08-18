@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Search, Sparkles, Copy, Check, Heart, ExternalLink, RefreshCw,
   Trash2, Edit, PlayCircle, Layers, CheckSquare, PlusCircle, X,
@@ -374,40 +374,42 @@ export const PromptHub: React.FC<PromptHubProps> = ({ currentUser, selectedSpeci
 
   const tools = ['All', 'Midjourney', 'Gemini', 'DALL-E 3', 'Stable Diffusion'];
 
-  const filteredPrompts = prompts.filter(prompt => {
-    const isVisible = prompt.status === 'Approved' || 
-                      (currentUser && (currentUser.role === 'Admin' || currentUser.id === prompt.authorId));
+  const filteredPrompts = useMemo(() => {
+    return prompts.filter(prompt => {
+      const isVisible = prompt.status === 'Approved' || 
+                        (currentUser && (currentUser.role === 'Admin' || currentUser.id === prompt.authorId));
 
-    if (!isVisible) return false;
+      if (!isVisible) return false;
 
-    const matchesSearch = 
-      prompt.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (prompt.rawPrompt && prompt.rawPrompt.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (prompt.optimizedPrompt && prompt.optimizedPrompt.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (prompt.tags && prompt.tags.some(t => t.toLowerCase().includes(searchTerm.toLowerCase())));
-    
-    const matchesTool = selectedTool === 'All' || prompt.toolType === selectedTool || (selectedTool === 'Gemini' && (prompt.toolType as any) === 'Gemini Imagen 3');
-    const matchesCategory = selectedCategory === 'Tất cả' || prompt.category === selectedCategory;
-    const matchesTag = selectedTag === 'Tất cả' || (prompt.tags && prompt.tags.some(t => t.toLowerCase().includes(selectedTag.toLowerCase())));
+      const matchesSearch = 
+        prompt.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (prompt.rawPrompt && prompt.rawPrompt.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (prompt.optimizedPrompt && prompt.optimizedPrompt.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (prompt.tags && prompt.tags.some(t => t.toLowerCase().includes(searchTerm.toLowerCase())));
+      
+      const matchesTool = selectedTool === 'All' || prompt.toolType === selectedTool || (selectedTool === 'Gemini' && (prompt.toolType as any) === 'Gemini Imagen 3');
+      const matchesCategory = selectedCategory === 'Tất cả' || prompt.category === selectedCategory;
+      const matchesTag = selectedTag === 'Tất cả' || (prompt.tags && prompt.tags.some(t => t.toLowerCase().includes(selectedTag.toLowerCase())));
 
-    let matchesSpecialty = true;
-    if (selectedSpecialty && selectedSpecialty !== 'all') {
-      const allText = `${prompt.title} ${prompt.category} ${prompt.rawPrompt} ${prompt.optimizedPrompt} ${(prompt.tags || []).join(' ')}`.toLowerCase();
-      if (selectedSpecialty === 'design') {
-        matchesSpecialty = prompt.toolType !== 'Gemini' || /thiết kế|đồ họa|poster|banner|phông|backdrop|avatar|3d|vector|màu sắc|kiến trúc/i.test(allText);
-      } else if (selectedSpecialty === 'code') {
-        matchesSpecialty = prompt.toolType === 'Gemini' || /code|lập trình|cntt|web|script|python|react|thuật toán|sql|ai/i.test(allText);
-      } else if (selectedSpecialty === 'research') {
-        matchesSpecialty = /nghiên cứu|học thuật|báo cáo|tiểu luận|luận văn|khoa học|dịch thuật|tóm tắt|phân tích dữ liệu/i.test(allText);
-      } else if (selectedSpecialty === 'marketing') {
-        matchesSpecialty = /marketing|truyền thông|slogan|quảng cáo|content|chiến dịch|thương hiệu|bán hàng/i.test(allText);
-      } else if (selectedSpecialty === 'youth') {
-        matchesSpecialty = prompt.category === 'Phông Hội Nghị' || /đoàn|hội|thanh niên|tình nguyện|sinh viên|phong trào|đại hội|mùa hè xanh/i.test(allText);
+      let matchesSpecialty = true;
+      if (selectedSpecialty && selectedSpecialty !== 'all') {
+        const allText = `${prompt.title} ${prompt.category} ${prompt.rawPrompt} ${prompt.optimizedPrompt} ${(prompt.tags || []).join(' ')}`.toLowerCase();
+        if (selectedSpecialty === 'design') {
+          matchesSpecialty = prompt.toolType !== 'Gemini' || /thiết kế|đồ họa|poster|banner|phông|backdrop|avatar|3d|vector|màu sắc|kiến trúc/i.test(allText);
+        } else if (selectedSpecialty === 'code') {
+          matchesSpecialty = prompt.toolType === 'Gemini' || /code|lập trình|cntt|web|script|python|react|thuật toán|sql|ai/i.test(allText);
+        } else if (selectedSpecialty === 'research') {
+          matchesSpecialty = /nghiên cứu|học thuật|báo cáo|tiểu luận|luận văn|khoa học|dịch thuật|tóm tắt|phân tích dữ liệu/i.test(allText);
+        } else if (selectedSpecialty === 'marketing') {
+          matchesSpecialty = /marketing|truyền thông|slogan|quảng cáo|content|chiến dịch|thương hiệu|bán hàng/i.test(allText);
+        } else if (selectedSpecialty === 'youth') {
+          matchesSpecialty = prompt.category === 'Phông Hội Nghị' || /đoàn|hội|thanh niên|tình nguyện|sinh viên|phong trào|đại hội|mùa hè xanh/i.test(allText);
+        }
       }
-    }
 
-    return matchesSearch && matchesTool && matchesCategory && matchesTag && matchesSpecialty;
-  });
+      return matchesSearch && matchesTool && matchesCategory && matchesTag && matchesSpecialty;
+    });
+  }, [prompts, searchTerm, selectedTool, selectedCategory, selectedTag, selectedSpecialty, currentUser]);
 
   // Reset page when filters change
   useEffect(() => {
