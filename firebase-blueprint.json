@@ -72,6 +72,31 @@
         "defaultAIModel": { "type": "string" }
       },
       "required": ["siteName", "driveDesignFolder", "drivePromptFolder"]
+    },
+    "Article": {
+      "title": "Article",
+      "description": "Educational guide, tip or announcement article",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string", "maxLength": 200 },
+        "slug": { "type": "string", "maxLength": 200 },
+        "summary": { "type": "string", "maxLength": 1000 },
+        "content": { "type": "string", "maxLength": 20000 },
+        "coverImage": { "type": "string" },
+        "category": { "type": "string" },
+        "author": { "type": "string" },
+        "authorId": { "type": "string" },
+        "authorAvatar": { "type": "string" },
+        "publishedAt": { "type": "string" },
+        "readTimeMinutes": { "type": "number" },
+        "viewsCount": { "type": "number" },
+        "likesCount": { "type": "number" },
+        "tags": { "type": "array" },
+        "isPinned": { "type": "boolean" },
+        "status": { "type": "string", "enum": ["Published", "Draft", "Pending"] }
+      },
+      "required": ["id", "title", "summary", "content", "category", "author", "status"]
     }
   },
   "firestore": {
@@ -86,6 +111,10 @@
     "prompts/{promptId}": {
       "schema": "AIPrompt",
       "description": "Optimized design generative prompts"
+    },
+    "articles/{articleId}": {
+      "schema": "Article",
+      "description": "Knowledge and announcement articles"
     },
     "systemConfig/global": {
       "schema": "SystemConfig",

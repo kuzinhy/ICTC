@@ -3,8 +3,9 @@ import {
   query, where, orderBy, onSnapshot, getDocFromServer
 } from 'firebase/firestore';
 import { db, auth } from './firebase';
-import { DesignFile, AIPrompt, User, SystemConfig } from '../types';
-import { DEFAULT_SYSTEM_CONFIG, INITIAL_DESIGN_FILES, INITIAL_AI_PROMPTS, INITIAL_USERS } from '../data/mockData';
+import { DesignFile, AIPrompt, User, SystemConfig, Article } from '../types';
+import { VietnameseFont, VIETNAMESE_FONTS_DATA } from '../data/vietnamFontsData';
+import { DEFAULT_SYSTEM_CONFIG, INITIAL_DESIGN_FILES, INITIAL_AI_PROMPTS, INITIAL_USERS, INITIAL_ARTICLES } from '../data/mockData';
 
 // Firestore operation types
 export enum OperationType {
@@ -41,19 +42,18 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     operationType,
     path
   };
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  console.warn('Firestore Notice: ', JSON.stringify(errInfo));
   return errInfo;
 }
 
 // Test Connection function as mandated by Firebase Integration Guidelines
 export async function testFirestoreConnection() {
   try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
-    console.log("Firebase connection established successfully!");
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('offline')) {
-      console.warn("Firestore client is offline or loading local cached records.");
+    if (auth.currentUser) {
+      await getDocFromServer(doc(db, 'test', 'connection'));
     }
+  } catch (error) {
+    // Gracefully ignore offline or unseeded test connection
   }
 }
 
@@ -66,21 +66,17 @@ export async function fetchSystemConfig(): Promise<SystemConfig> {
     const snap = await getDoc(docRef);
     if (snap.exists()) {
       return snap.data() as SystemConfig;
-    } else {
-      // Seed default config into Firestore on first load
-      const defaultConfig = DEFAULT_SYSTEM_CONFIG;
-      await setDoc(docRef, defaultConfig);
-      return defaultConfig;
     }
   } catch (error) {
-    handleFirestoreError(error, OperationType.GET, 'systemConfig/global');
-    // Local storage fallback for maximum safety and offline preview
-    const local = localStorage.getItem('ictc_system_config');
-    if (local) {
-      try { return JSON.parse(local); } catch (e) {}
-    }
-    return DEFAULT_SYSTEM_CONFIG;
+    // Unauthenticated or offline fallback
   }
+  
+  // Local storage fallback for maximum safety and offline preview
+  const local = localStorage.getItem('ictc_system_config');
+  if (local) {
+    try { return JSON.parse(local); } catch (e) {}
+  }
+  return DEFAULT_SYSTEM_CONFIG;
 }
 
 export async function updateSystemConfigInDb(config: SystemConfig): Promise<void> {
@@ -107,10 +103,9 @@ export async function fetchDesignsFromDb(): Promise<DesignFile[]> {
       return items;
     }
   } catch (error) {
-    handleFirestoreError(error, OperationType.LIST, 'designs');
+    // Fallback gracefully to offline cache if permission denied or offline
   }
   
-  // Fallback to local storage if firestore is empty or errored
   const local = localStorage.getItem('ictc_design_files');
   if (local) {
     try { return JSON.parse(local); } catch (e) {}
@@ -152,10 +147,9 @@ export async function fetchPromptsFromDb(): Promise<AIPrompt[]> {
       return items;
     }
   } catch (error) {
-    handleFirestoreError(error, OperationType.LIST, 'prompts');
+    // Fallback gracefully
   }
   
-  // Fallback
   const local = localStorage.getItem('ictc_ai_prompts');
   if (local) {
     try { return JSON.parse(local); } catch (e) {}
@@ -187,17 +181,20 @@ export async function deletePromptFromDb(promptId: string): Promise<void> {
 // Users Sync Helper
 // ---------------------------------------------
 export async function fetchUsersFromDb(): Promise<User[]> {
-  try {
-    const querySnapshot = await getDocs(collection(db, 'users'));
-    const items: User[] = [];
-    querySnapshot.forEach((doc) => {
-      items.push({ id: doc.id, ...doc.data() } as User);
-    });
-    if (items.length > 0) {
-      return items;
+  // Only query Firestore if authenticated to avoid permission errors on private users collection
+  if (auth.currentUser) {
+    try {
+      const querySnapshot = await getDocs(collection(db, 'users'));
+      const items: User[] = [];
+      querySnapshot.forEach((doc) => {
+        items.push({ id: doc.id, ...doc.data() } as User);
+      });
+      if (items.length > 0) {
+        return items;
+      }
+    } catch (error) {
+      // Fallback gracefully
     }
-  } catch (error) {
-    handleFirestoreError(error, OperationType.LIST, 'users');
   }
   
   const local = localStorage.getItem('ictc_registered_users');
@@ -226,3 +223,92 @@ export async function deleteUserFromDb(userId: string): Promise<void> {
     throw error;
   }
 }
+
+// ---------------------------------------------
+// Articles Sync Helper
+// ---------------------------------------------
+export async function fetchArticlesFromDb(): Promise<Article[]> {
+  try {
+    const querySnapshot = await getDocs(collection(db, 'articles'));
+    const items: Article[] = [];
+    querySnapshot.forEach((doc) => {
+      items.push({ id: doc.id, ...doc.data() } as Article);
+    });
+    if (items.length > 0) {
+      return items;
+    }
+  } catch (error) {
+    // Fallback gracefully
+  }
+  
+  const local = localStorage.getItem('ictc_articles');
+  if (local) {
+    try { return JSON.parse(local); } catch (e) {}
+  }
+  return INITIAL_ARTICLES;
+}
+
+export async function saveArticleToDb(article: Article): Promise<void> {
+  try {
+    const docRef = doc(db, 'articles', article.id);
+    await setDoc(docRef, article);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, `articles/${article.id}`);
+    throw error;
+  }
+}
+
+export async function deleteArticleFromDb(articleId: string): Promise<void> {
+  try {
+    const docRef = doc(db, 'articles', articleId);
+    await deleteDoc(docRef);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `articles/${articleId}`);
+    throw error;
+  }
+}
+
+// ---------------------------------------------
+// Fonts Sync Helper
+// ---------------------------------------------
+export async function fetchFontsFromDb(): Promise<VietnameseFont[]> {
+  try {
+    const querySnapshot = await getDocs(collection(db, 'fonts'));
+    const items: VietnameseFont[] = [];
+    querySnapshot.forEach((doc) => {
+      items.push({ id: doc.id, ...doc.data() } as VietnameseFont);
+    });
+    if (items.length > 0) {
+      return items;
+    }
+  } catch (error) {
+    // Fallback gracefully
+  }
+  
+  const local = localStorage.getItem('ictc_vietnamese_fonts');
+  if (local) {
+    try { return JSON.parse(local); } catch (e) {}
+  }
+  return VIETNAMESE_FONTS_DATA;
+}
+
+export async function saveFontToDb(font: VietnameseFont): Promise<void> {
+  try {
+    const docRef = doc(db, 'fonts', font.id);
+    await setDoc(docRef, font);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, `fonts/${font.id}`);
+    throw error;
+  }
+}
+
+export async function deleteFontFromDb(fontId: string): Promise<void> {
+  try {
+    const docRef = doc(db, 'fonts', fontId);
+    await deleteDoc(docRef);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `fonts/${fontId}`);
+    throw error;
+  }
+}
+

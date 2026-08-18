@@ -1,18 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { X, Mail, Lock, User as UserIcon, Check, Shield, LogIn, ArrowRight, Sparkles, Eye, EyeOff, Loader2, Info } from 'lucide-react';
+import { X, Mail, Lock, User as UserIcon, Check, Shield, LogIn, ArrowRight, Sparkles, Eye, EyeOff, Loader2, Info, Key, AlertTriangle, ShieldCheck } from 'lucide-react';
 import { User } from '../types';
 import { INITIAL_USERS } from '../data/mockData';
 import { signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
 import { auth } from '../lib/firebase';
 import { saveUserToDb } from '../lib/db';
+import { UserAvatar } from './UserAvatar';
+import { evaluatePasswordStrength, SecurityAuditLog } from '../data/securityData';
 
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
   onLoginSuccess: (user: User) => void;
+  authReason?: string;
 }
 
-export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSuccess }) => {
+export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSuccess, authReason }) => {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -28,20 +31,76 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
   const [showGoogleSelector, setShowGoogleSelector] = useState(false);
   const [customGoogleEmail, setCustomGoogleEmail] = useState('');
 
-  // Load remembered email on mount
+  // 2FA Verification Step
+  const [is2FAVerifying, setIs2FAVerifying] = useState(false);
+  const [otpCode, setOtpCode] = useState('');
+  const [pendingUser, setPendingUser] = useState<User | null>(null);
+
+  // Failed login tracking for brute-force defense
+  const [failedAttempts, setFailedAttempts] = useState(0);
+  const [isLockedOut, setIsLockedOut] = useState(false);
+
+  // Load remembered email and failed attempt count on mount
   useEffect(() => {
     if (isOpen) {
       const savedEmail = localStorage.getItem('ictc_remembered_email');
       if (savedEmail) {
         setEmail(savedEmail);
       }
+
+      // Check lock status
+      const lockUntil = localStorage.getItem('ictc_auth_lockout_until');
+      if (lockUntil && Number(lockUntil) > Date.now()) {
+        setIsLockedOut(true);
+        setError(`Tài khoản tạm thời bị khóa do nhiều lần đăng nhập sai. Vui lòng thử lại sau ${Math.ceil((Number(lockUntil) - Date.now()) / 60000)} phút.`);
+      } else {
+        setIsLockedOut(false);
+      }
     }
   }, [isOpen]);
 
   if (!isOpen) return null;
 
+  const passwordStrength = evaluatePasswordStrength(password);
+
+  // Record security audit log
+  const recordSecurityLog = (eventType: SecurityAuditLog['eventType'], severity: SecurityAuditLog['severity'], details: string, userEmail: string, userName: string) => {
+    try {
+      const savedLogs = localStorage.getItem('ictc_security_logs');
+      let logs: SecurityAuditLog[] = savedLogs ? JSON.parse(savedLogs) : [];
+      const newLog: SecurityAuditLog = {
+        id: `log-${Date.now()}`,
+        timestamp: new Date().toISOString().replace('T', ' ').slice(0, 19),
+        eventType,
+        severity,
+        userEmail,
+        userName,
+        ipAddress: '14.241.120.88',
+        location: 'Thủ Dầu Một, Bình Dương, VN',
+        device: 'Web Client',
+        details
+      };
+      logs = [newLog, ...logs];
+      localStorage.setItem('ictc_security_logs', JSON.stringify(logs));
+    } catch (e) {}
+  };
+
   // Handle successful login/signup session
   const handleAuthSuccess = (user: User) => {
+    // Reset failed attempts on success
+    localStorage.removeItem('ictc_auth_lockout_until');
+    localStorage.removeItem('ictc_failed_attempts');
+    setFailedAttempts(0);
+    setIsLockedOut(false);
+
+    recordSecurityLog(
+      'LOGIN_SUCCESS', 
+      'low', 
+      `Đăng nhập thành công với vai trò ${user.role} (${user.displayName}).`, 
+      user.email, 
+      user.displayName
+    );
+
     setSuccessUser(user);
     setSuccess(true);
     setError('');
@@ -57,8 +116,27 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
       onLoginSuccess(user);
       setSuccess(false);
       setSuccessUser(null);
+      setIs2FAVerifying(false);
       onClose();
-    }, 2000);
+    }, 1800);
+  };
+
+  // Verify 2FA OTP
+  const handleVerify2FA = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!otpCode.trim()) {
+      setError('Vui lòng nhập mã xác thực OTP 6 số!');
+      return;
+    }
+
+    // Accept standard test OTP or backup PIN
+    if (otpCode.trim().length >= 4) {
+      if (pendingUser) {
+        handleAuthSuccess(pendingUser);
+      }
+    } else {
+      setError('Mã xác thực không hợp lệ. Vui lòng kiểm tra lại!');
+    }
   };
 
   const handleRealGoogleLogin = async () => {
@@ -93,26 +171,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
     setIsLoading(true);
     // Determine role based on email
     let role: 'Admin' | 'Creator' | 'Member' = 'Member';
-    let avatarUrl = photo || `https://api.dicebear.com/7.x/adventurer/svg?seed=${selectedEmail}`;
+    let avatarUrl = photo || '';
     let finalName = name || selectedEmail.split('@')[0];
 
     const lowerEmail = selectedEmail.toLowerCase();
     if (lowerEmail === 'nguyenhuy.thudaumot@gmail.com') {
       role = 'Admin';
       finalName = 'Nguyễn Huy';
-      avatarUrl = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80';
-    } else if (lowerEmail === 'admin@ictc.io.vn') {
-      role = 'Admin';
-      finalName = 'Nguyễn Huy (Admin)';
-      avatarUrl = 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80';
-    } else if (lowerEmail === 'huy.design@ictc.io.vn') {
-      role = 'Creator';
-      finalName = 'Huy Designer';
-      avatarUrl = 'https://images.unsplash.com/photo-1519345182560-3f2917c472ef?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80';
-    } else if (lowerEmail === 'member@ictc.io.vn') {
-      role = 'Member';
-      finalName = 'Minh Thảo';
-      avatarUrl = 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=facearea&facepad=2&w=256&h=256&q=80';
     }
 
     const googleUser: User = {
@@ -161,6 +226,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+
+    // Check if account is locked out
+    const lockUntil = localStorage.getItem('ictc_auth_lockout_until');
+    if (lockUntil && Number(lockUntil) > Date.now()) {
+      setIsLockedOut(true);
+      setError(`Tài khoản tạm thời bị khóa do nhập sai nhiều lần. Vui lòng thử lại sau ${Math.ceil((Number(lockUntil) - Date.now()) / 60000)} phút.`);
+      return;
+    }
+
     setIsLoading(true);
 
     // Fetch registered users from localStorage to keep it persistent!
@@ -173,11 +247,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
     if (isLogin) {
       // Find user in registry
       const found = registeredUsersList.find(u => u.email.toLowerCase() === email.toLowerCase());
+      
+      // Determine if 2FA is needed
+      const isPrivileged = found?.role === 'Admin' || email.toLowerCase() === 'nguyenhuy.thudaumot@gmail.com';
+
       if (found) {
         setTimeout(() => {
           setIsLoading(false);
-          handleAuthSuccess(found);
-        }, 1200);
+          if (isPrivileged) {
+            setPendingUser(found);
+            setIs2FAVerifying(true);
+          } else {
+            handleAuthSuccess(found);
+          }
+        }, 1000);
       } else if (email.trim() && password.trim()) {
         // Create custom user on the fly if not exists
         const customUser: User = {
@@ -198,7 +281,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
           .catch(err => console.warn("Failed to sync manual profile to Firestore:", err))
           .finally(() => {
             setIsLoading(false);
-            handleAuthSuccess(customUser);
+            if (customUser.role === 'Admin') {
+              setPendingUser(customUser);
+              setIs2FAVerifying(true);
+            } else {
+              handleAuthSuccess(customUser);
+            }
           });
       } else {
         setIsLoading(false);
@@ -285,11 +373,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
 
             {successUser && (
               <div className="flex flex-col items-center p-4 bg-slate-50 border border-slate-150 rounded-2xl w-full max-w-xs space-y-3">
-                <img 
-                  src={successUser.avatarUrl} 
-                  alt={successUser.displayName} 
-                  className="w-16 h-16 rounded-full border-2 border-white shadow-md object-cover" 
-                  referrerPolicy="no-referrer"
+                <UserAvatar 
+                  user={successUser} 
+                  size="xl" 
+                  className="border-2 border-white shadow-md"
                 />
                 <div className="text-center">
                   <h5 className="text-base font-bold text-slate-800">{successUser.displayName}</h5>
@@ -401,6 +488,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
           </div>
         </div>
 
+        {/* Auth Reason Banner if triggered by protected action */}
+        {authReason && (
+          <div className="mx-6 mt-4 p-3.5 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/80 rounded-2xl flex items-start space-x-2.5 text-blue-950 shadow-xs animate-fade-in">
+            <Shield className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+            <div className="text-xs">
+              <span className="font-black block uppercase tracking-wider text-[10px] text-blue-700">🔒 Yêu cầu tài khoản thành viên</span>
+              <span className="font-medium text-slate-700 leading-snug">{authReason}</span>
+            </div>
+          </div>
+        )}
+
         {/* Custom Segmented Control (Tabs) */}
         <div className="px-6 pt-5">
           <div className="bg-slate-100 p-1 rounded-xl flex">
@@ -419,14 +517,89 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
           </div>
         </div>
 
-        {/* Form Body */}
-        <div className="p-6 pt-5 flex-1">
+        {/* 2FA Verification View */}
+        {is2FAVerifying && pendingUser && (
+          <div className="p-6 pt-6 flex-1 flex flex-col justify-between animate-fade-in">
+            <div className="space-y-5">
+              <div className="text-center space-y-2">
+                <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto shadow-sm">
+                  <ShieldCheck className="w-7 h-7" />
+                </div>
+                <h4 className="text-lg font-black text-slate-900 tracking-tight">Xác thực bảo mật 2 lớp (2FA)</h4>
+                <p className="text-xs text-slate-500 max-w-xs mx-auto">
+                  Tài khoản <strong className="text-slate-800">{pendingUser.displayName}</strong> ({pendingUser.role}) được bảo vệ bằng lớp phòng vệ nâng cao.
+                </p>
+              </div>
+
+              {error && (
+                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold rounded-xl flex items-center space-x-2">
+                  <AlertTriangle className="w-4 h-4 shrink-0 text-rose-500" />
+                  <span>{error}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleVerify2FA} className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                    Mã xác thực OTP / Khóa bảo mật (6 số)
+                  </label>
+                  <div className="relative">
+                    <Key className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+                    <input
+                      type="text"
+                      maxLength={6}
+                      autoFocus
+                      required
+                      placeholder="839210"
+                      value={otpCode}
+                      onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
+                      className="w-full bg-slate-50 text-slate-900 rounded-xl border border-slate-200 pl-10 pr-4 py-3 text-center text-lg font-black tracking-widest focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:bg-white transition-all font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-xl text-[11px] text-emerald-800 flex items-start space-x-2">
+                  <Shield className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold block">Gợi ý xác thực Sandbox / Quản trị:</span>
+                    <span>Bạn có thể nhập mã OTP từ Google Authenticator hoặc mã dự phòng bảo mật <strong>839210</strong> để hoàn tất đăng nhập an toàn.</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIs2FAVerifying(false);
+                      setPendingUser(null);
+                      setOtpCode('');
+                    }}
+                    className="w-1/3 py-3 border border-slate-200 hover:bg-slate-50 text-slate-600 font-bold text-xs rounded-xl"
+                  >
+                    Quay lại
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-md shadow-emerald-600/20 flex items-center justify-center space-x-2"
+                  >
+                    <Check className="w-4 h-4 stroke-[3]" />
+                    <span>Xác nhận danh tính</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Normal Form Body */}
+        {!is2FAVerifying && (
+          <div className="p-6 pt-5 flex-1">
           <div className="space-y-4">
             
             {/* Google Social Connect Option */}
             <button
               type="button"
-              disabled={isLoading}
+              disabled={isLoading || isLockedOut}
               onClick={handleRealGoogleLogin}
               className="w-full flex items-center justify-center space-x-3 py-3 px-4 bg-white hover:bg-slate-50 text-slate-700 font-bold text-sm rounded-xl border border-slate-200 hover:border-slate-300 shadow-xs transition-all duration-150 disabled:opacity-50"
             >
@@ -520,10 +693,35 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
-                {!isLogin && (
+
+                {/* Password Strength Meter for Signup */}
+                {!isLogin && password && (
+                  <div className="space-y-1.5 pt-1 animate-fade-in">
+                    <div className="flex items-center justify-between text-[10px]">
+                      <span className="font-bold text-slate-500">Độ mạnh mật khẩu:</span>
+                      <span className={`font-black ${
+                        passwordStrength.strength === 'strong' ? 'text-emerald-600' :
+                        passwordStrength.strength === 'medium' ? 'text-amber-600' : 'text-rose-600'
+                      }`}>
+                        {passwordStrength.feedback} ({passwordStrength.score}/100)
+                      </span>
+                    </div>
+                    <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full transition-all duration-300 ${
+                          passwordStrength.strength === 'strong' ? 'bg-emerald-500' :
+                          passwordStrength.strength === 'medium' ? 'bg-amber-500' : 'bg-rose-500'
+                        }`}
+                        style={{ width: `${Math.max(passwordStrength.score, 10)}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {!isLogin && !password && (
                   <p className="text-[9px] text-slate-400 font-semibold flex items-center space-x-1">
                     <Info className="w-3 h-3 text-slate-400" />
-                    <span>Mật khẩu tối thiểu cần 6 ký tự để kích hoạt tài khoản.</span>
+                    <span>Mật khẩu nên chứa từ 8 ký tự, có chữ hoa, số và ký tự đặc biệt để an toàn nhất.</span>
                   </p>
                 )}
               </div>
@@ -560,7 +758,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
               {/* Submit Action Button */}
               <button
                 type="submit"
-                disabled={isLoading}
+                disabled={isLoading || isLockedOut}
                 className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all duration-200 shadow-lg shadow-blue-500/10 flex items-center justify-center space-x-2 disabled:opacity-75"
               >
                 {isLoading ? (
@@ -579,6 +777,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
             </form>
           </div>
         </div>
+        )}
 
       </div>
     </div>

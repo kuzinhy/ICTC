@@ -2,11 +2,6 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Default-deny catch-all safety net
-    match /{document=**} {
-      allow read, write: if false;
-    }
-
     // Helper functions
     function isValidId(id) {
       return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
@@ -28,17 +23,21 @@ service cloud.firestore {
       return resource.data;
     }
 
-    function getUserRole() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    function isBootstrappedAdmin() {
+      return isSignedIn() && request.auth.token.email == 'nguyenhuy.thudaumot@gmail.com';
     }
 
     function isAdmin() {
-      return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserRole() == 'Admin';
+      return isBootstrappedAdmin() || (
+        isSignedIn() && 
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Admin'
+      );
     }
 
     // Entity validator blueprints
     function isValidUser(data) {
-      return data.keys().hasAll(['id', 'email', 'displayName', 'role', 'joinedDate'])
+      return data.keys().hasAll(['id', 'email', 'displayName', 'role'])
         && data.id is string
         && data.email is string
         && data.displayName is string
@@ -69,6 +68,19 @@ service cloud.firestore {
         && data.status in ['Approved', 'Pending', 'Rejected'];
     }
 
+    function isValidArticle(data) {
+      return data.keys().hasAll(['id', 'title', 'summary', 'content', 'category', 'author', 'status'])
+        && data.id is string
+        && data.title is string
+        && data.title.size() <= 200
+        && data.summary is string
+        && data.summary.size() <= 1000
+        && data.content is string
+        && data.category is string
+        && data.author is string
+        && data.status in ['Published', 'Draft', 'Pending'];
+    }
+
     function isValidConfig(data) {
       return data.keys().hasAll(['siteName', 'driveDesignFolder', 'drivePromptFolder'])
         && data.siteName is string
@@ -78,10 +90,10 @@ service cloud.firestore {
 
     // Match rules for users
     match /users/{userId} {
-      allow get: if isSignedIn();
-      allow list: if isSignedIn();
-      allow create: if isSignedIn() && isOwner(userId) && isValidUser(getIncomingData()) && getIncomingData().role != 'Admin';
-      allow update: if isSignedIn() && isOwner(userId) && isValidUser(getIncomingData()) && getIncomingData().role == getExistingData().role;
+      allow get: if isOwner(userId) || isAdmin();
+      allow list: if isAdmin();
+      allow create: if isSignedIn() && (isOwner(userId) || isAdmin()) && isValidUser(getIncomingData());
+      allow update: if isSignedIn() && (isAdmin() || (isOwner(userId) && isValidUser(getIncomingData())));
       allow delete: if isAdmin();
     }
 
@@ -93,7 +105,6 @@ service cloud.firestore {
         isAdmin() || (
           getExistingData().authorId == request.auth.uid 
           && getIncomingData().authorId == request.auth.uid 
-          && getIncomingData().status == getExistingData().status
           && isValidDesign(getIncomingData())
         )
       );
@@ -108,8 +119,20 @@ service cloud.firestore {
         isAdmin() || (
           getExistingData().authorId == request.auth.uid 
           && getIncomingData().authorId == request.auth.uid 
-          && getIncomingData().status == getExistingData().status
           && isValidPrompt(getIncomingData())
+        )
+      );
+      allow delete: if isAdmin() || (isSignedIn() && getExistingData().authorId == request.auth.uid);
+    }
+
+    // Match rules for Articles
+    match /articles/{articleId} {
+      allow read: if true;
+      allow create: if isSignedIn() && isValidArticle(getIncomingData());
+      allow update: if isSignedIn() && (
+        isAdmin() || (
+          getExistingData().authorId == request.auth.uid
+          && isValidArticle(getIncomingData())
         )
       );
       allow delete: if isAdmin() || (isSignedIn() && getExistingData().authorId == request.auth.uid);
@@ -119,6 +142,11 @@ service cloud.firestore {
     match /systemConfig/{docId} {
       allow read: if true;
       allow write: if isAdmin() && isValidConfig(getIncomingData());
+    }
+
+    // Connection test document
+    match /test/{docId} {
+      allow read: if true;
     }
   }
 }

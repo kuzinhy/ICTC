@@ -33,17 +33,17 @@ export const simulateOptimizePrompt = (rawPrompt: string, category: string, tool
   const lowercasePrompt = rawPrompt.toLowerCase();
   
   let additions = '';
-  if (lowercasePrompt.includes('website') || lowercasePrompt.includes('ui') || lowercasePrompt.includes('giao diện')) {
-    additions = 'Stunning modern UI/UX design, neomorphic and glassmorphic elements, elegant dark-mode, clean layouts, vibrant cyan and deep indigo glowing accents, futuristic interactive dashboard widgets, photorealistic, cinematic volumetric lighting, Octane render, 8k resolution, sharp details, highly cohesive color theory.';
-  } else if (lowercasePrompt.includes('poster') || lowercasePrompt.includes('banner')) {
-    additions = 'Swiss graphic design typography, grid-based composition, high contrast retro-futuristic aesthetic, neon glowing cyberpunk accents, elegant serif or display font pairings, bold minimalism, volumetric fog, sharp paths, photorealistic vector art, ultra high-detail.';
-  } else if (lowercasePrompt.includes('illustration') || lowercasePrompt.includes('vẽ') || lowercasePrompt.includes('chibi')) {
-    additions = 'Vibrant and whimsical 3D chibi character sheet, claymation style, polished tactile surfaces, glowing ambient occlusion, Pixar animation studio aesthetics, joyful expression, soft pastel volumetric background, hyper-detailed render, Blender 3D, cute and professional.';
+  if (lowercasePrompt.includes('phông') || lowercasePrompt.includes('đại hội') || lowercasePrompt.includes('hội nghị')) {
+    additions = 'Phông nền sân khấu hội nghị đại hội trang trọng chuẩn phong cách Việt Nam, cờ Đảng búa liềm và cờ Tổ quốc đỏ tươi bay phấp phới ở góc trái, hoa văn Trống đồng Đông Sơn mạ vàng kim khắc chìm tinh xảo ở tâm giữa, cụm hoa sen hồng nở rộ thanh khiết, dải lụa đỏ uốn lượn sắc sảo, dải ruy băng mạ vàng, bố cục cân đối hoàn hảo cho chữ tiêu đề trung tâm, ánh sáng sân khấu studio rực rỡ, độ phân giải 8K, chất lượng dựng hình đồ họa vector sắc nét.';
+  } else if (lowercasePrompt.includes('băng rôn') || lowercasePrompt.includes('banner') || lowercasePrompt.includes('standee')) {
+    additions = 'Bố cục đồ họa truyền thông chuẩn Việt Nam, tỷ lệ chuẩn xác, dải cờ đỏ sao vàng uốn lượn mềm mại, hoa văn trống đồng Đông Sơn chìm tinh tế, màu sắc tươi sáng trang nhã, không gian thoáng đãng chừa vị trí đặt tiêu đề, đồ họa vector sắc nét, ánh sáng tự nhiên rực rỡ, độ phân giải siêu nét 8k.';
+  } else if (lowercasePrompt.includes('thiệp') || lowercasePrompt.includes('giấy khen') || lowercasePrompt.includes('bằng khen')) {
+    additions = 'Khung viền hoa văn trang trí hoàng gia mạ vàng kim dập nổi tỉ mỉ trên nền đỏ đô hoặc kem ngà cao cấp, biểu tượng Quốc huy hoặc hoa sen cách điệu tinh xảo, bố cục trang nghiêm chuẩn nghi thức ngoại giao và vinh danh Nhà nước Việt Nam, chất lượng in ấn nghệ thuật cao cấp, hiệu ứng ánh kim lấp lánh, độ chi tiết 8K.';
   } else {
-    additions = 'Hyper-detailed, volumetric lighting, rich cinematic contrast, elegant artistic composition, award-winning visual depth, studio photography grade, 8k resolution, photorealistic textures, masterclass in digital design, crisp focus.';
+    additions = 'Thiết kế đồ họa chuẩn quy chuẩn truyền thông và văn hóa Việt Nam, màu sắc rực rỡ tương phản hài hòa, hoa văn trống đồng Đông Sơn và hoa sen biểu trưng truyền thống, ánh sáng studio nghệ thuật, chiều sâu không gian ấn tượng, độ phân giải 8K siêu nét, chi tiết tỉ mỉ.';
   }
 
-  return `Optimized for ${toolType}: A highly refined and visually stunning version of "${rawPrompt}". Detail specs: ${additions}`;
+  return `[${toolType}] Câu lệnh tạo ảnh: Thiết kế "${rawPrompt}". Yêu cầu chi tiết: ${additions}`;
 };
 
 // Fallback rule-based simulator for Design Layout Previews
@@ -136,15 +136,15 @@ export const optimizePrompt = async (
   }
 
   try {
-    const promptText = `Bạn là chuyên gia kỹ thuật viết prompt (Prompt Engineer) cho các AI tạo ảnh như Midjourney, DALL-E 3 và Stable Diffusion.
-Hãy tối ưu hóa câu lệnh thiết kế sau đây thành một prompt tiếng Anh hoàn chỉnh, cực kỳ chi tiết, sống động và chuyên nghiệp nhất.
-Yêu cầu: thêm chi tiết về cấu trúc thị giác, ánh sáng (cinematic lighting, studio lighting), phong cách nghệ thuật (claymation, vector, neumorphic, isometric 3D, v.v.), góc máy, màu sắc chủ đạo, chất lượng dựng hình (Octane Render, Unreal Engine 5, 8k resolution, ray tracing).
+    const promptText = `Bạn là chuyên gia kỹ thuật viết prompt (Prompt Engineer) cho các AI tạo ảnh như Midjourney, DALL-E 3, Stable Diffusion và Gemini Imagen.
+Hãy tối ưu hóa câu lệnh thiết kế sau đây thành một câu lệnh tạo ảnh (Prompt) hoàn chỉnh bằng TIẾNG VIỆT, cực kỳ chi tiết, chuẩn quy chuẩn đồ họa, văn hóa, biểu tượng và nghi thức Việt Nam (sử dụng cờ Tổ quốc Việt Nam, cờ Đảng Cộng sản Việt Nam, hoa sen, Trống đồng Đông Sơn, màu cờ đỏ sao vàng, phong cách trang trọng lịch sự).
+Yêu cầu: thêm chi tiết cụ thể về bố cục thị giác, ánh sáng sân khấu/studio, phối màu chuẩn, hoa văn trang trí truyền thống, không gian chừa trống cho tiêu đề, tỷ lệ khung hình và chất lượng dựng hình 8K sắc nét.
 
 Prompt thô cần tối ưu: "${rawPrompt}"
 Loại thiết kế: ${category}
 AI hướng tới: ${toolType}
 
-Chỉ trả về duy nhất đoạn prompt tiếng Anh đã tối ưu hóa, không thêm bất kỳ lời dẫn hay ghi chú nào khác.`;
+Chỉ trả về duy nhất đoạn câu lệnh tiếng Việt đã tối ưu hóa, không thêm bất kỳ lời dẫn hay ghi chú nào khác.`;
 
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,

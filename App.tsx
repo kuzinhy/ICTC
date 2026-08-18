@@ -1,28 +1,65 @@
 import React, { useState, useEffect } from 'react';
 import { DesignHub } from './components/DesignHub';
 import { PromptHub } from './components/PromptHub';
+import { ArticleHub } from './components/ArticleHub';
+import { FontHub } from './components/FontHub';
 import { ContactHub } from './components/ContactHub';
 import { AdminDashboard } from './components/AdminDashboard';
 import { MemberProfile } from './components/MemberProfile';
 import { AuthModal } from './components/AuthModal';
-import { User, SystemConfig } from './types';
-import { INITIAL_USERS, DEFAULT_SYSTEM_CONFIG, INITIAL_DESIGN_FILES, INITIAL_AI_PROMPTS } from './data/mockData';
+import { NewsTicker } from './components/NewsTicker';
+import { ArticleReaderModal } from './components/ArticleReaderModal';
+import { CommandSearchModal } from './components/CommandSearchModal';
+import { VietnamDesignPaletteModal } from './components/VietnamDesignPaletteModal';
+import { LegalComplianceModal } from './components/LegalComplianceModal';
+import { User, SystemConfig, Article, DesignFile, AIPrompt } from './types';
+import { 
+  INITIAL_USERS, DEFAULT_SYSTEM_CONFIG, INITIAL_DESIGN_FILES, 
+  INITIAL_AI_PROMPTS, INITIAL_ARTICLES 
+} from './data/mockData';
+import { UserAvatar } from './components/UserAvatar';
 import { 
   FolderOpen, Sparkles, MessageCircle, LogIn, LogOut, 
-  Shield, User as UserIcon, Settings, HelpCircle, Activity 
+  Shield, User as UserIcon, Settings, HelpCircle, Activity,
+  BookOpen, Search, Command, Palette, Scale, ShieldCheck, Type
 } from 'lucide-react';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from './lib/firebase';
 import { 
   testFirestoreConnection, fetchSystemConfig, fetchDesignsFromDb, 
-  fetchPromptsFromDb, fetchUsersFromDb, saveUserToDb 
+  fetchPromptsFromDb, fetchUsersFromDb, fetchArticlesFromDb, saveUserToDb 
 } from './lib/db';
 
 const App: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'designs' | 'prompts' | 'contact' | 'admin' | 'profile'>('designs');
+  const [activeTab, setActiveTab] = useState<'designs' | 'prompts' | 'articles' | 'fonts' | 'contact' | 'admin' | 'profile'>('designs');
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [authReason, setAuthReason] = useState<string | undefined>();
   const [systemConfig, setSystemConfig] = useState<SystemConfig>(DEFAULT_SYSTEM_CONFIG);
+
+  // Global data caches for Search and NewsTicker
+  const [articles, setArticles] = useState<Article[]>(INITIAL_ARTICLES);
+  const [designFiles, setDesignFiles] = useState<DesignFile[]>(INITIAL_DESIGN_FILES);
+  const [aiPrompts, setAiPrompts] = useState<AIPrompt[]>(INITIAL_AI_PROMPTS);
+
+  // Global modals
+  const [selectedArticleForReading, setSelectedArticleForReading] = useState<Article | null>(null);
+  const [isCommandSearchOpen, setIsCommandSearchOpen] = useState(false);
+  const [isPaletteOpen, setIsPaletteOpen] = useState(false);
+  const [isLegalOpen, setIsLegalOpen] = useState(false);
+  const [legalTab, setLegalTab] = useState<'ip_policy' | 'community_rules' | 'ai_ethics' | 'dmca_takedown'>('ip_policy');
+
+  // Listen for Ctrl+K or Cmd+K
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsCommandSearchOpen(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Initialize and seed local storage with default database schemas
   useEffect(() => {
@@ -41,8 +78,13 @@ const App: React.FC = () => {
     } else {
       try {
         let parsed: User[] = JSON.parse(savedUsers);
-        // Purge legacy auto-added mock accounts
         parsed = parsed.filter(u => !['admin@ictc.io.vn', 'huy.design@ictc.io.vn', 'member@ictc.io.vn'].includes(u.email.toLowerCase()));
+        parsed = parsed.map(u => {
+          if (u.email.toLowerCase() === 'nguyenhuy.thudaumot@gmail.com' && u.avatarUrl?.includes('unsplash.com')) {
+            return { ...u, avatarUrl: '' };
+          }
+          return u;
+        });
         if (parsed.length === 0) {
           parsed = INITIAL_USERS;
         }
@@ -51,13 +93,27 @@ const App: React.FC = () => {
     }
 
     const savedDesigns = localStorage.getItem('ictc_design_files');
-    if (!savedDesigns) {
+    if (savedDesigns) {
+      try { setDesignFiles(JSON.parse(savedDesigns)); } catch (e) {}
+    } else {
       localStorage.setItem('ictc_design_files', JSON.stringify(INITIAL_DESIGN_FILES));
+      setDesignFiles(INITIAL_DESIGN_FILES);
     }
 
     const savedPrompts = localStorage.getItem('ictc_ai_prompts');
-    if (!savedPrompts) {
+    if (savedPrompts) {
+      try { setAiPrompts(JSON.parse(savedPrompts)); } catch (e) {}
+    } else {
       localStorage.setItem('ictc_ai_prompts', JSON.stringify(INITIAL_AI_PROMPTS));
+      setAiPrompts(INITIAL_AI_PROMPTS);
+    }
+
+    const savedArticles = localStorage.getItem('ictc_articles');
+    if (savedArticles) {
+      try { setArticles(JSON.parse(savedArticles)); } catch (e) {}
+    } else {
+      localStorage.setItem('ictc_articles', JSON.stringify(INITIAL_ARTICLES));
+      setArticles(INITIAL_ARTICLES);
     }
 
     // 2. Test connection & load real-time Firestore configs
@@ -69,16 +125,24 @@ const App: React.FC = () => {
         setSystemConfig(config);
         localStorage.setItem('ictc_system_config', JSON.stringify(config));
 
-        const users = await fetchUsersFromDb();
-        localStorage.setItem('ictc_registered_users', JSON.stringify(users));
-
         const designs = await fetchDesignsFromDb();
+        setDesignFiles(designs);
         localStorage.setItem('ictc_design_files', JSON.stringify(designs));
 
         const prompts = await fetchPromptsFromDb();
+        setAiPrompts(prompts);
         localStorage.setItem('ictc_ai_prompts', JSON.stringify(prompts));
+
+        const arts = await fetchArticlesFromDb();
+        setArticles(arts);
+        localStorage.setItem('ictc_articles', JSON.stringify(arts));
+
+        if (auth.currentUser) {
+          const users = await fetchUsersFromDb();
+          localStorage.setItem('ictc_registered_users', JSON.stringify(users));
+        }
       } catch (e) {
-        console.warn("Could not sync Firestore data, offline mode remains active:", e);
+        console.warn("Cloud sync fallback to local storage:", e);
       }
     };
 
@@ -95,7 +159,6 @@ const App: React.FC = () => {
 
         let foundUser = registeredUsers.find(u => u.email.toLowerCase() === firebaseUser.email?.toLowerCase());
         if (!foundUser) {
-          // Auto create user object with fallback credentials
           let role: 'Admin' | 'Creator' | 'Member' = 'Member';
           if (firebaseUser.email.toLowerCase() === 'nguyenhuy.thudaumot@gmail.com') {
             role = 'Admin';
@@ -120,7 +183,6 @@ const App: React.FC = () => {
         setCurrentUser(foundUser);
         localStorage.setItem('ictc_logged_in_user', JSON.stringify(foundUser));
       } else {
-        // Fallback session state
         const savedSession = localStorage.getItem('ictc_logged_in_user');
         if (savedSession) {
           try { setCurrentUser(JSON.parse(savedSession)); } catch (err) {}
@@ -136,6 +198,25 @@ const App: React.FC = () => {
     localStorage.setItem('ictc_logged_in_user', JSON.stringify(user));
   };
 
+  const handleUpdateCurrentUser = (updatedUser: User) => {
+    setCurrentUser(updatedUser);
+    localStorage.setItem('ictc_logged_in_user', JSON.stringify(updatedUser));
+    
+    const savedUsersStr = localStorage.getItem('ictc_registered_users');
+    let savedUsers: User[] = [...INITIAL_USERS];
+    if (savedUsersStr) {
+      try { savedUsers = JSON.parse(savedUsersStr); } catch (e) {}
+    }
+    const updatedList = savedUsers.map(u => 
+      (u.id === updatedUser.id || u.email.toLowerCase() === updatedUser.email.toLowerCase()) ? updatedUser : u
+    );
+    localStorage.setItem('ictc_registered_users', JSON.stringify(updatedList));
+
+    saveUserToDb(updatedUser).catch(err => {
+      console.warn("Could not sync updated profile to Firestore:", err);
+    });
+  };
+
   const handleLogout = async () => {
     try {
       await signOut(auth);
@@ -145,6 +226,11 @@ const App: React.FC = () => {
     if (activeTab === 'admin') {
       setActiveTab('designs');
     }
+  };
+
+  const handleRequireAuth = (reason?: string) => {
+    setAuthReason(reason || 'Vui lòng đăng nhập hoặc tạo tài khoản thành viên để tiếp tục!');
+    setIsAuthOpen(true);
   };
 
   return (
@@ -167,46 +253,67 @@ const App: React.FC = () => {
             </div>
           </div>
 
-          {/* User Session status or Login CTA */}
-          <div className="flex items-center space-x-3.5">
-            {currentUser ? (
-              <div className="flex items-center space-x-3 bg-slate-100 p-1.5 pr-3.5 rounded-full border border-slate-200/80">
-                <button
-                  onClick={() => setActiveTab('profile')}
-                  className="flex items-center space-x-2 text-left hover:opacity-90 group transition-all"
-                  title="Xem hồ sơ thành viên"
-                >
-                  <img 
-                    src={currentUser.avatarUrl} 
-                    alt={currentUser.displayName} 
-                    className="w-8 h-8 rounded-full border border-white shadow-sm group-hover:ring-2 group-hover:ring-blue-500 transition-all"
-                  />
-                  <div className="hidden sm:block text-left">
-                    <p className="text-xs font-bold text-slate-900 leading-tight truncate max-w-[120px] group-hover:text-blue-600 transition-colors">
-                      {currentUser.displayName}
-                    </p>
-                    <p className="text-[9px] font-extrabold text-blue-600 uppercase tracking-wider leading-none">
-                      {currentUser.role}
-                    </p>
-                  </div>
-                </button>
-                <button
-                  onClick={handleLogout}
-                  className="p-1 text-slate-400 hover:text-red-500 hover:bg-white rounded-full transition-colors"
-                  title="Đăng xuất"
-                >
-                  <LogOut className="w-4 h-4" />
-                </button>
-              </div>
-            ) : (
+          {/* Center / Right: Quick Global Search Bar */}
+          <div className="flex items-center space-x-3">
+            <button
+              onClick={() => setIsCommandSearchOpen(true)}
+              className="hidden md:flex items-center space-x-2 px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200/80 text-slate-500 text-xs font-semibold rounded-full border border-slate-200 transition-all"
+              title="Tìm kiếm nhanh toàn hệ thống"
+            >
+              <Search className="w-3.5 h-3.5 text-slate-400" />
+              <span>Tìm kiếm tài nguyên...</span>
+              <kbd className="px-1.5 py-0.5 bg-white border border-slate-200 text-[10px] font-mono rounded text-slate-400">⌘K</kbd>
+            </button>
+
+            {/* User Session status or Login CTA */}
+            <div className="flex items-center space-x-2">
               <button
-                onClick={() => setIsAuthOpen(true)}
-                className="inline-flex items-center space-x-1.5 px-4.5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs sm:text-sm rounded-full transition-all duration-200 shadow-sm shadow-blue-500/10"
+                onClick={() => setIsCommandSearchOpen(true)}
+                className="md:hidden p-2 text-slate-600 hover:bg-slate-100 rounded-full"
+                title="Tìm kiếm"
               >
-                <LogIn className="w-4 h-4" />
-                <span>Đăng nhập</span>
+                <Search className="w-4 h-4" />
               </button>
-            )}
+
+              {currentUser ? (
+                <div className="flex items-center space-x-3 bg-slate-100 p-1.5 pr-3.5 rounded-full border border-slate-200/80">
+                  <button
+                    onClick={() => setActiveTab('profile')}
+                    className="flex items-center space-x-2 text-left hover:opacity-90 group transition-all"
+                    title="Xem hồ sơ thành viên"
+                  >
+                    <UserAvatar 
+                      user={currentUser} 
+                      size="sm" 
+                      className="border border-white shadow-sm group-hover:ring-2 group-hover:ring-blue-500 transition-all flex-shrink-0"
+                    />
+                    <div className="hidden sm:block text-left">
+                      <p className="text-xs font-bold text-slate-900 leading-tight truncate max-w-[120px] group-hover:text-blue-600 transition-colors">
+                        {currentUser.displayName}
+                      </p>
+                      <p className="text-[9px] font-extrabold text-blue-600 uppercase tracking-wider leading-none">
+                        {currentUser.role}
+                      </p>
+                    </div>
+                  </button>
+                  <button
+                    onClick={handleLogout}
+                    className="p-1 text-slate-400 hover:text-red-500 hover:bg-white rounded-full transition-colors"
+                    title="Đăng xuất"
+                  >
+                    <LogOut className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setIsAuthOpen(true)}
+                  className="inline-flex items-center space-x-1.5 px-4.5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs sm:text-sm rounded-full transition-all duration-200 shadow-sm shadow-blue-500/10"
+                >
+                  <LogIn className="w-4 h-4" />
+                  <span>Đăng nhập</span>
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </nav>
@@ -243,20 +350,27 @@ const App: React.FC = () => {
         />
 
         {/* Main Workspace Frame */}
-        <main className="container mx-auto px-4 py-8 sm:py-12 max-w-7xl">
+        <main className="container mx-auto px-4 py-6 sm:py-10 max-w-7xl space-y-6">
           
           {/* Header Description */}
-          <header className="text-center mb-10 space-y-3 max-w-3xl mx-auto">
+          <header className="text-center mb-6 space-y-2.5 max-w-3xl mx-auto">
             <h1 className="text-3xl md:text-4xl lg:text-5xl font-black tracking-tight text-slate-900 drop-shadow-xs leading-tight">
               {systemConfig.siteName}
             </h1>
             <p className="text-sm sm:text-base text-slate-500 font-medium leading-relaxed">
-              {systemConfig.siteDescription}. Khám phá hàng ngàn mẫu slide PowerPoint, tài liệu chuyên ngành, và bộ câu lệnh thiết kế hình ảnh AI cao cấp hoàn toàn miễn phí.
+              {systemConfig.siteDescription}. Khám phá hàng ngàn mẫu slide PowerPoint, tài liệu chuyên ngành, bài viết kinh nghiệm và bộ câu lệnh AI cao cấp.
             </p>
           </header>
 
+          {/* Dynamic News Ticker Component (Di chuyển tin tức & bài viết mới) */}
+          <NewsTicker 
+            articles={articles}
+            onSelectArticle={(art) => setSelectedArticleForReading(art)}
+            onNavigateArticlesTab={() => setActiveTab('articles')}
+          />
+
           {/* Primary View Tab Switcher */}
-          <div className="max-w-3xl mx-auto mb-10">
+          <div className="max-w-4xl mx-auto my-6">
             <div className="bg-white p-1.5 rounded-2xl border border-slate-200/80 shadow-md flex flex-wrap sm:flex-nowrap gap-1">
               <button
                 onClick={() => setActiveTab('designs')}
@@ -282,6 +396,32 @@ const App: React.FC = () => {
                 <span>Kho AI Prompts</span>
               </button>
 
+              {/* Bài viết mới tab */}
+              <button
+                onClick={() => setActiveTab('articles')}
+                className={`flex-1 flex items-center justify-center space-x-2 py-3 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 ${
+                  activeTab === 'articles'
+                    ? 'bg-blue-600 text-white shadow-md shadow-blue-500/10'
+                    : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
+                }`}
+              >
+                <BookOpen className="w-4 h-4" />
+                <span>Bài viết & Tin tức</span>
+              </button>
+
+              {/* Font Việt hóa tab */}
+              <button
+                onClick={() => setActiveTab('fonts')}
+                className={`flex-1 flex items-center justify-center space-x-2 py-3 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 ${
+                  activeTab === 'fonts'
+                    ? 'bg-blue-600 text-white shadow-md shadow-blue-500/10'
+                    : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
+                }`}
+              >
+                <Type className="w-4 h-4" />
+                <span>Font Việt hóa</span>
+              </button>
+
               <button
                 onClick={() => setActiveTab('contact')}
                 className={`flex-1 flex items-center justify-center space-x-2 py-3 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all duration-200 ${
@@ -291,7 +431,7 @@ const App: React.FC = () => {
                 }`}
               >
                 <MessageCircle className="w-4 h-4" />
-                <span>Liên hệ Cộng đồng</span>
+                <span>Liên hệ</span>
               </button>
 
               {/* Dynamic Profile tab is visible when currentUser is logged in */}
@@ -305,7 +445,7 @@ const App: React.FC = () => {
                   }`}
                 >
                   <UserIcon className="w-4 h-4" />
-                  <span>Hồ sơ của tôi</span>
+                  <span>Hồ sơ</span>
                 </button>
               )}
 
@@ -320,7 +460,7 @@ const App: React.FC = () => {
                   }`}
                 >
                   <Shield className="w-4 h-4" />
-                  <span>Cấu hình Quản trị</span>
+                  <span>Quản trị</span>
                 </button>
               )}
             </div>
@@ -328,36 +468,167 @@ const App: React.FC = () => {
 
           {/* Render Dynamic Layout Elements */}
           <div className="min-h-[450px]">
-            {activeTab === 'designs' && <DesignHub currentUser={currentUser} />}
-            {activeTab === 'prompts' && <PromptHub currentUser={currentUser} />}
+            {activeTab === 'designs' && (
+              <DesignHub 
+                currentUser={currentUser} 
+                onRequireAuth={handleRequireAuth}
+              />
+            )}
+            {activeTab === 'prompts' && (
+              <PromptHub 
+                currentUser={currentUser} 
+                onRequireAuth={handleRequireAuth}
+              />
+            )}
+            {activeTab === 'articles' && (
+              <ArticleHub 
+                currentUser={currentUser} 
+                onNavigateDesignHub={() => setActiveTab('designs')} 
+                onRequireAuth={handleRequireAuth}
+              />
+            )}
+            {activeTab === 'fonts' && (
+              <FontHub 
+                currentUser={currentUser}
+                systemConfig={systemConfig}
+                onRequireAuth={handleRequireAuth}
+              />
+            )}
             {activeTab === 'contact' && <ContactHub />}
-            {activeTab === 'profile' && currentUser && <MemberProfile currentUser={currentUser} />}
+            {activeTab === 'profile' && currentUser && (
+              <MemberProfile 
+                currentUser={currentUser} 
+                onUpdateUser={handleUpdateCurrentUser} 
+              />
+            )}
             {activeTab === 'admin' && currentUser?.role === 'Admin' && (
               <AdminDashboard currentUser={currentUser} />
             )}
           </div>
 
           {/* Site Footer */}
-          <footer className="text-center mt-20 md:mt-24 pb-8 border-t border-slate-200 pt-10 space-y-4">
-            <p className="text-slate-400 text-xs sm:text-sm font-semibold">
-              &copy; {new Date().getFullYear()} {systemConfig.siteName}. Đồng hành cùng sinh viên Việt Nam.
-            </p>
-            <div className="flex justify-center space-x-6 text-xs text-slate-400 font-bold">
-              <a href="https://zalo.me/g/kovwak924" target="_blank" rel="noopener noreferrer" className="hover:text-blue-600 transition-colors">Zalo Cộng đồng</a>
-              <span>•</span>
-              <a href="https://www.facebook.com/groups/313739042955897" target="_blank" rel="noopener noreferrer" className="hover:text-blue-600 transition-colors">Group Facebook</a>
-              <span>•</span>
-              <a href="https://www.tiktok.com/@huy.ng.m" target="_blank" rel="noopener noreferrer" className="hover:text-blue-600 transition-colors">TikTok Creator</a>
+          <footer className="mt-20 md:mt-24 pb-12 border-t border-slate-200 pt-10 space-y-6">
+            <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+              <div className="space-y-1 text-center md:text-left">
+                <div className="flex items-center justify-center md:justify-start space-x-2">
+                  <div className="w-6 h-6 bg-gradient-to-tr from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center text-white font-black text-xs">
+                    IC
+                  </div>
+                  <span className="font-extrabold text-slate-900 text-sm tracking-tight">{systemConfig.siteName}</span>
+                </div>
+                <p className="text-slate-500 text-xs font-medium max-w-md">
+                  Nền tảng chia sẻ tài nguyên thiết kế, AI prompts và nghiên cứu học tập phi lợi nhuận cho sinh viên và cán bộ Đoàn - Hội Việt Nam.
+                </p>
+              </div>
+
+              {/* Compliance & Standards Links */}
+              <div className="flex flex-wrap items-center justify-center gap-3 text-xs font-bold text-slate-600">
+                <button
+                  onClick={() => setIsPaletteOpen(true)}
+                  className="px-3 py-1.5 bg-slate-100 hover:bg-blue-50 hover:text-blue-600 rounded-xl transition-colors flex items-center space-x-1.5"
+                >
+                  <Palette className="w-3.5 h-3.5 text-amber-500" />
+                  <span>Bảng màu & Tỷ lệ chuẩn VN</span>
+                </button>
+                <button
+                  onClick={() => { setLegalTab('ip_policy'); setIsLegalOpen(true); }}
+                  className="px-3 py-1.5 bg-slate-100 hover:bg-blue-50 hover:text-blue-600 rounded-xl transition-colors flex items-center space-x-1.5"
+                >
+                  <Scale className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Bản quyền SHTT</span>
+                </button>
+                <button
+                  onClick={() => { setLegalTab('community_rules'); setIsLegalOpen(true); }}
+                  className="px-3 py-1.5 bg-slate-100 hover:bg-blue-50 hover:text-blue-600 rounded-xl transition-colors flex items-center space-x-1.5"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Chuẩn mực cộng đồng</span>
+                </button>
+                <button
+                  onClick={() => { setLegalTab('ai_ethics'); setIsLegalOpen(true); }}
+                  className="px-3 py-1.5 bg-slate-100 hover:bg-blue-50 hover:text-blue-600 rounded-xl transition-colors flex items-center space-x-1.5"
+                >
+                  <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
+                  <span>Đạo đức AI</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-center justify-between border-t border-slate-100 pt-6 text-xs text-slate-400 gap-4">
+              <p className="font-semibold text-center sm:text-left">
+                &copy; {new Date().getFullYear()} {systemConfig.siteName}. Giấy phép nội dung CC BY-NC-SA 4.0.
+              </p>
+              <div className="flex items-center space-x-5 font-bold">
+                <a href="https://zalo.me/g/kovwak924" target="_blank" rel="noopener noreferrer" className="hover:text-blue-600 transition-colors">Zalo Cộng đồng</a>
+                <span>•</span>
+                <a href="https://www.facebook.com/groups/313739042955897" target="_blank" rel="noopener noreferrer" className="hover:text-blue-600 transition-colors">Group Facebook</a>
+                <span>•</span>
+                <a href="https://www.tiktok.com/@huy.ng.m" target="_blank" rel="noopener noreferrer" className="hover:text-blue-600 transition-colors">TikTok Creator</a>
+                <span>•</span>
+                <button 
+                  onClick={() => { setLegalTab('dmca_takedown'); setIsLegalOpen(true); }}
+                  className="hover:text-rose-600 underline transition-colors"
+                >
+                  Báo cáo vi phạm (DMCA)
+                </button>
+              </div>
             </div>
           </footer>
         </main>
       </div>
 
+      {/* Article Reader Modal */}
+      {selectedArticleForReading && (
+        <ArticleReaderModal
+          article={selectedArticleForReading}
+          currentUser={currentUser}
+          onClose={() => setSelectedArticleForReading(null)}
+          onSelectArticle={(art) => setSelectedArticleForReading(art)}
+          onRequireAuth={handleRequireAuth}
+          relatedArticles={articles.filter(a => a.id !== selectedArticleForReading.id)}
+        />
+      )}
+
+      {/* Global Command Search Dialog (Ctrl + K) */}
+      <CommandSearchModal
+        isOpen={isCommandSearchOpen}
+        onClose={() => setIsCommandSearchOpen(false)}
+        designFiles={designFiles}
+        aiPrompts={aiPrompts}
+        articles={articles}
+        onSelectDesign={(file) => {
+          setActiveTab('designs');
+        }}
+        onSelectPrompt={(prm) => {
+          setActiveTab('prompts');
+        }}
+        onSelectArticle={(art) => {
+          setSelectedArticleForReading(art);
+        }}
+      />
+
       {/* Login / Signup Dialog */}
       <AuthModal
         isOpen={isAuthOpen}
-        onClose={() => setIsAuthOpen(false)}
+        onClose={() => {
+          setIsAuthOpen(false);
+          setAuthReason(undefined);
+        }}
         onLoginSuccess={handleLoginSuccess}
+        authReason={authReason}
+      />
+
+      {/* Vietnam Design Standards & Color Palette Modal */}
+      <VietnamDesignPaletteModal
+        isOpen={isPaletteOpen}
+        onClose={() => setIsPaletteOpen(false)}
+      />
+
+      {/* Intellectual Property & Legal Compliance Modal */}
+      <LegalComplianceModal
+        isOpen={isLegalOpen}
+        onClose={() => setIsLegalOpen(false)}
+        initialTab={legalTab}
       />
     </div>
   );

@@ -4,11 +4,12 @@ import {
   Trash2, Edit3, CheckCircle2, Clock, AlertCircle, RefreshCw, 
   Phone, Building2, UserCheck, UserX, MoreVertical, Crown, 
   Palette, User as UserIcon, ShieldAlert, Mail, ArrowRight, 
-  CheckCircle, Ban
+  CheckCircle, Ban, Camera, Upload
 } from 'lucide-react';
 import { User } from '../types';
 import { saveUserToDb, deleteUserFromDb, fetchUsersFromDb } from '../lib/db';
 import { INITIAL_USERS } from '../data/mockData';
+import { UserAvatar, compressAndResizeImage } from './UserAvatar';
 
 interface MemberManagementProps {
   currentUser: User;
@@ -124,7 +125,7 @@ export const MemberManagement: React.FC<MemberManagementProps> = ({
       department: 'Thành viên ICTC',
       phoneNumber: '',
       bio: '',
-      avatarUrl: `https://api.dicebear.com/7.x/adventurer/svg?seed=${Date.now()}`
+      avatarUrl: ''
     });
     setIsAddModalOpen(true);
   };
@@ -140,7 +141,7 @@ export const MemberManagement: React.FC<MemberManagementProps> = ({
       department: user.department || '',
       phoneNumber: user.phoneNumber || '',
       bio: user.bio || '',
-      avatarUrl: user.avatarUrl
+      avatarUrl: user.avatarUrl || ''
     });
   };
 
@@ -166,7 +167,7 @@ export const MemberManagement: React.FC<MemberManagementProps> = ({
       department: formData.department.trim() || undefined,
       phoneNumber: formData.phoneNumber.trim() || undefined,
       bio: formData.bio.trim() || undefined,
-      avatarUrl: formData.avatarUrl || `https://api.dicebear.com/7.x/adventurer/svg?seed=${formData.email}`,
+      avatarUrl: formData.avatarUrl || '',
       joinedDate: new Date().toISOString().split('T')[0]
     };
 
@@ -632,11 +633,10 @@ export const MemberManagement: React.FC<MemberManagementProps> = ({
                       {/* Avatar & Display Name */}
                       <td className="py-3.5 px-4">
                         <div className="flex items-center space-x-3">
-                          <img 
-                            src={user.avatarUrl} 
-                            alt={user.displayName} 
-                            className="w-10 h-10 rounded-full border border-slate-200 shadow-xs object-cover flex-shrink-0"
-                            referrerPolicy="no-referrer"
+                          <UserAvatar 
+                            user={user} 
+                            size="md" 
+                            className="border border-slate-200 shadow-xs flex-shrink-0"
                           />
                           <div>
                             <div className="flex items-center space-x-1.5">
@@ -1081,11 +1081,10 @@ export const MemberManagement: React.FC<MemberManagementProps> = ({
             </div>
 
             <div className="p-4 bg-slate-50 rounded-2xl border border-slate-150 flex items-center space-x-3">
-              <img 
-                src={userToDelete.avatarUrl} 
-                alt={userToDelete.displayName} 
-                className="w-11 h-11 rounded-full border border-slate-200 object-cover"
-                referrerPolicy="no-referrer"
+              <UserAvatar 
+                user={userToDelete} 
+                size="lg" 
+                className="border border-slate-200"
               />
               <div className="truncate">
                 <h5 className="text-xs font-bold text-slate-900 truncate">{userToDelete.displayName}</h5>
