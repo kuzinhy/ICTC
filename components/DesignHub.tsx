@@ -19,13 +19,14 @@ import { useToast } from '../context/ToastContext';
 
 interface DesignHubProps {
   currentUser: UserType | null;
+  files: DesignFile[];
+  onFilesUpdate: (updatedFiles: DesignFile[]) => void;
   selectedSpecialty?: string;
   onRequireAuth?: (reason?: string) => void;
 }
 
-export const DesignHub: React.FC<DesignHubProps> = ({ currentUser, selectedSpecialty, onRequireAuth }) => {
+export const DesignHub: React.FC<DesignHubProps> = ({ currentUser, files, onFilesUpdate, selectedSpecialty, onRequireAuth }) => {
   const { success: toastSuccess, info: toastInfo, error: toastError } = useToast();
-  const [files, setFiles] = useState<DesignFile[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [selectedFile, setSelectedFile] = useState<DesignFile | null>(null);
@@ -56,26 +57,6 @@ export const DesignHub: React.FC<DesignHubProps> = ({ currentUser, selectedSpeci
   // Report Modal State
   const [reportingItem, setReportingItem] = useState<{ id: string; title: string } | null>(null);
 
-  // Load files from storage
-  useEffect(() => {
-    const saved = localStorage.getItem('ictc_design_files');
-    if (saved) {
-      try {
-        setFiles(JSON.parse(saved));
-      } catch (e) {
-        setFiles(INITIAL_DESIGN_FILES);
-      }
-    } else {
-      setFiles(INITIAL_DESIGN_FILES);
-      localStorage.setItem('ictc_design_files', JSON.stringify(INITIAL_DESIGN_FILES));
-    }
-  }, []);
-
-  const saveFiles = (updatedFiles: DesignFile[]) => {
-    setFiles(updatedFiles);
-    localStorage.setItem('ictc_design_files', JSON.stringify(updatedFiles));
-  };
-
   const handleDownload = (fileId: string) => {
     // Security verification: Only members can download
     if (!currentUser) {
@@ -97,7 +78,7 @@ export const DesignHub: React.FC<DesignHubProps> = ({ currentUser, selectedSpeci
       }
       return f;
     });
-    saveFiles(updated);
+    onFilesUpdate(updated);
   };
 
   const handleOpenDriveFolder = () => {
@@ -164,7 +145,7 @@ export const DesignHub: React.FC<DesignHubProps> = ({ currentUser, selectedSpeci
         }
         return f;
       });
-      saveFiles(updated);
+      onFilesUpdate(updated);
       setFormSuccessMessage('Cập nhật tài nguyên thành công!');
     } else {
       // Run hidden safety moderation scan
@@ -220,7 +201,7 @@ export const DesignHub: React.FC<DesignHubProps> = ({ currentUser, selectedSpeci
         console.warn("Failed to sync new design to Cloud Firestore:", err);
       });
 
-      saveFiles([newFile, ...files]);
+      onFilesUpdate([newFile, ...files]);
 
       if (isAutoFlagged) {
         setFormSuccessMessage('CẢNH BÁO KIỂM DUYỆT: Bài đăng chứa từ ngữ cần xem xét. Nội dung đã được chuyển sang hàng chờ Ban Quản Trị thẩm định trước khi công khai!');
@@ -266,7 +247,7 @@ export const DesignHub: React.FC<DesignHubProps> = ({ currentUser, selectedSpeci
     e.stopPropagation();
     if (window.confirm("Bạn có chắc chắn muốn xóa file thiết kế này khỏi hệ thống?")) {
       const updated = files.filter(f => f.id !== fileId);
-      saveFiles(updated);
+      onFilesUpdate(updated);
       try {
         await deleteDesignFromDb(fileId);
       } catch (err) {

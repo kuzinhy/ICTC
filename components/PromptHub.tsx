@@ -20,6 +20,8 @@ import { useToast } from '../context/ToastContext';
 
 interface PromptHubProps {
   currentUser: User | null;
+  prompts: AIPrompt[];
+  onPromptsUpdate: (updatedPrompts: AIPrompt[]) => void;
   selectedSpecialty?: string;
   onRequireAuth?: (reason?: string) => void;
 }
@@ -54,9 +56,8 @@ const SAMPLE_PREVIEW_IMAGES = [
 
 const ITEMS_PER_PAGE = 8;
 
-export const PromptHub: React.FC<PromptHubProps> = ({ currentUser, selectedSpecialty, onRequireAuth }) => {
+export const PromptHub: React.FC<PromptHubProps> = ({ currentUser, prompts, onPromptsUpdate, selectedSpecialty, onRequireAuth }) => {
   const { success: toastSuccess, info: toastInfo, vip: toastVip, error: toastError } = useToast();
-  const [prompts, setPrompts] = useState<AIPrompt[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('Tất cả');
   const [selectedTag, setSelectedTag] = useState<string>('Tất cả');
@@ -106,39 +107,6 @@ export const PromptHub: React.FC<PromptHubProps> = ({ currentUser, selectedSpeci
   const [legalTab, setLegalTab] = useState<'ip_policy' | 'community_rules' | 'ai_ethics' | 'dmca_takedown'>('ai_ethics');
   const [reportingItem, setReportingItem] = useState<{ id: string; title: string } | null>(null);
   const [isVipModalOpen, setIsVipModalOpen] = useState(false);
-
-  // Load prompts from local storage and sync
-  useEffect(() => {
-    const saved = localStorage.getItem('ictc_ai_prompts');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length >= INITIAL_AI_PROMPTS.length) {
-          // Normalize previewImageUrl
-          const normalized = parsed.map((p: any) => ({
-            ...p,
-            previewImageUrl: p.previewImageUrl || p.previewUrl || 'https://images.unsplash.com/photo-1541872703-74c5e44368f9?auto=format&fit=crop&w=1200&q=80',
-            optimizedPrompt: p.optimizedPrompt || p.rawPrompt || '',
-            rawPrompt: p.rawPrompt || p.description || p.title || ''
-          }));
-          setPrompts(normalized);
-        } else {
-          setPrompts(INITIAL_AI_PROMPTS);
-          localStorage.setItem('ictc_ai_prompts', JSON.stringify(INITIAL_AI_PROMPTS));
-        }
-      } catch (e) {
-        setPrompts(INITIAL_AI_PROMPTS);
-      }
-    } else {
-      setPrompts(INITIAL_AI_PROMPTS);
-      localStorage.setItem('ictc_ai_prompts', JSON.stringify(INITIAL_AI_PROMPTS));
-    }
-  }, []);
-
-  const savePrompts = (updatedPrompts: AIPrompt[]) => {
-    setPrompts(updatedPrompts);
-    localStorage.setItem('ictc_ai_prompts', JSON.stringify(updatedPrompts));
-  };
 
   const handleCopyText = (text: string, id: string | 'sandbox', type: 'optimized' | 'raw' = 'optimized') => {
     if (id !== 'sandbox') {
@@ -205,7 +173,7 @@ export const PromptHub: React.FC<PromptHubProps> = ({ currentUser, selectedSpeci
       }
       return p;
     });
-    savePrompts(updated);
+    onPromptsUpdate(updated);
   };
 
   // Submit new prompt or edit existing
@@ -244,7 +212,7 @@ export const PromptHub: React.FC<PromptHubProps> = ({ currentUser, selectedSpeci
         }
         return p;
       });
-      savePrompts(updated);
+      onPromptsUpdate(updated);
     } else {
       // Create Mode
       const isAdmin = currentUser?.role === 'Admin';
@@ -294,7 +262,7 @@ export const PromptHub: React.FC<PromptHubProps> = ({ currentUser, selectedSpeci
         console.warn("Failed to sync new prompt to Cloud Firestore:", err);
       });
 
-      savePrompts([newPrompt, ...prompts]);
+      onPromptsUpdate([newPrompt, ...prompts]);
     }
 
     setFormSuccess(true);
@@ -328,7 +296,7 @@ export const PromptHub: React.FC<PromptHubProps> = ({ currentUser, selectedSpeci
     if (!window.confirm("Bạn có chắc chắn muốn xóa Prompt này khỏi thư viện?")) return;
     deletePromptFromDb(promptId).catch(err => console.warn("Failed to delete prompt in db:", err));
     const updated = prompts.filter(p => p.id !== promptId);
-    savePrompts(updated);
+    onPromptsUpdate(updated);
   };
 
   const handleOptimizePrompt = async () => {

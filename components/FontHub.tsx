@@ -21,6 +21,8 @@ import { useToast } from '../context/ToastContext';
 interface FontHubProps {
   currentUser?: User | null;
   systemConfig?: SystemConfig;
+  fontsList: VietnameseFont[];
+  onFontsUpdate: (updatedFonts: VietnameseFont[]) => void;
   onRequireAuth?: (reason?: string) => void;
 }
 
@@ -38,10 +40,11 @@ const SAMPLE_TEXT_PRESETS = [
 export const FontHub: React.FC<FontHubProps> = ({ 
   currentUser, 
   systemConfig, 
+  fontsList,
+  onFontsUpdate,
   onRequireAuth 
 }) => {
   const { success: toastSuccess, info: toastInfo } = useToast();
-  const [fontsList, setFontsList] = useState<VietnameseFont[]>(VIETNAMESE_FONTS_DATA);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('Tất cả');
   const [sampleText, setSampleText] = useState('Việt Nam Đất Nước Rồng Tiên - Tự Do & Hạnh Phúc 2026');
@@ -57,31 +60,6 @@ export const FontHub: React.FC<FontHubProps> = ({
   const [selectedFontForCdn, setSelectedFontForCdn] = useState<VietnameseFont | null>(null);
   const [reportingItem, setReportingItem] = useState<{ id: string; title: string } | null>(null);
   const [isVipModalOpen, setIsVipModalOpen] = useState(false);
-
-  // Load fonts from storage / DB on mount
-  useEffect(() => {
-    const loadFonts = async () => {
-      try {
-        const stored = localStorage.getItem('ictc_vietnamese_fonts');
-        if (stored) {
-          try {
-            const parsed = JSON.parse(stored);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              setFontsList(parsed);
-            }
-          } catch (e) {}
-        }
-        const dbFonts = await fetchFontsFromDb();
-        if (dbFonts && dbFonts.length > 0) {
-          setFontsList(dbFonts);
-          localStorage.setItem('ictc_vietnamese_fonts', JSON.stringify(dbFonts));
-        }
-      } catch (err) {
-        console.warn("Using offline Vietnamese fonts database");
-      }
-    };
-    loadFonts();
-  }, []);
 
   // Dynamically load Google Fonts stylesheets into document.head so all preview specimens render accurately
   useEffect(() => {
@@ -154,8 +132,7 @@ export const FontHub: React.FC<FontHubProps> = ({
 
   const handleAddNewFont = (newFont: VietnameseFont) => {
     const updated = [newFont, ...fontsList.filter(f => f.id !== newFont.id)];
-    setFontsList(updated);
-    localStorage.setItem('ictc_vietnamese_fonts', JSON.stringify(updated));
+    onFontsUpdate(updated);
     saveFontToDb(newFont).catch(e => console.warn('Could not sync to cloud db:', e));
     toastSuccess(`Đã thêm font "${newFont.name}" vào thư viện font hệ thống!`, 'Thêm Font mới');
   };

@@ -18,6 +18,8 @@ import { useToast } from '../context/ToastContext';
 
 interface ArticleHubProps {
   currentUser: UserType | null;
+  articles: Article[];
+  onArticlesUpdate: (updatedArticles: Article[]) => void;
   selectedSpecialty?: string;
   onNavigateDesignHub?: () => void;
   onRequireAuth?: (reason?: string) => void;
@@ -34,12 +36,13 @@ const CATEGORIES = [
 
 export const ArticleHub: React.FC<ArticleHubProps> = ({ 
   currentUser, 
+  articles,
+  onArticlesUpdate,
   selectedSpecialty,
   onNavigateDesignHub,
   onRequireAuth 
 }) => {
   const { success: toastSuccess, info: toastInfo } = useToast();
-  const [articles, setArticles] = useState<Article[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Tất cả');
   const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
@@ -71,18 +74,6 @@ export const ArticleHub: React.FC<ArticleHubProps> = ({
 
   // Load articles & cached interactions
   useEffect(() => {
-    const saved = localStorage.getItem('ictc_articles');
-    if (saved) {
-      try {
-        setArticles(JSON.parse(saved));
-      } catch (e) {
-        setArticles(INITIAL_ARTICLES);
-      }
-    } else {
-      setArticles(INITIAL_ARTICLES);
-      localStorage.setItem('ictc_articles', JSON.stringify(INITIAL_ARTICLES));
-    }
-
     const savedBookmarks = localStorage.getItem('ictc_bookmarks');
     if (savedBookmarks) {
       try {
@@ -98,11 +89,6 @@ export const ArticleHub: React.FC<ArticleHubProps> = ({
       } catch (e) {}
     }
   }, []);
-
-  const saveArticlesList = (updated: Article[]) => {
-    setArticles(updated);
-    localStorage.setItem('ictc_articles', JSON.stringify(updated));
-  };
 
   const handleToggleBookmark = (e: React.MouseEvent, art: Article) => {
     e.stopPropagation();
@@ -169,7 +155,7 @@ export const ArticleHub: React.FC<ArticleHubProps> = ({
 
     const updatedArt = { ...art, likesCount: newLikesCount };
     const updatedList = articles.map(a => a.id === art.id ? updatedArt : a);
-    saveArticlesList(updatedList);
+    onArticlesUpdate(updatedList);
     saveArticleToDb(updatedArt).catch(console.warn);
   };
 
@@ -248,7 +234,7 @@ export const ArticleHub: React.FC<ArticleHubProps> = ({
     };
 
     const updated = [newArticleItem, ...articles];
-    saveArticlesList(updated);
+    onArticlesUpdate(updated);
 
     try {
       await saveArticleToDb(newArticleItem);

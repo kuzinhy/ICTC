@@ -13,11 +13,12 @@ import { ArticleReaderModal } from './components/ArticleReaderModal';
 import { CommandSearchModal } from './components/CommandSearchModal';
 import { VietnamDesignPaletteModal } from './components/VietnamDesignPaletteModal';
 import { LegalComplianceModal } from './components/LegalComplianceModal';
-import { User, SystemConfig, Article, DesignFile, AIPrompt } from './types';
+import { User, SystemConfig, Article, DesignFile, AIPrompt, VietnameseFont } from './types';
 import { 
   INITIAL_USERS, DEFAULT_SYSTEM_CONFIG, INITIAL_DESIGN_FILES, 
   INITIAL_AI_PROMPTS, INITIAL_ARTICLES 
 } from './data/mockData';
+import { VIETNAMESE_FONTS_DATA } from './data/vietnamFontsData';
 import { UserAvatar } from './components/UserAvatar';
 import { 
   FolderOpen, Sparkles, MessageCircle, LogIn, LogOut, 
@@ -29,7 +30,8 @@ import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from './lib/firebase';
 import { 
   testFirestoreConnection, fetchSystemConfig, fetchDesignsFromDb, 
-  fetchPromptsFromDb, fetchUsersFromDb, fetchArticlesFromDb, saveUserToDb 
+  fetchPromptsFromDb, fetchUsersFromDb, fetchArticlesFromDb, saveUserToDb,
+  fetchFontsFromDb
 } from './lib/db';
 
 import { ToastContainer } from './components/ToastContainer';
@@ -59,6 +61,7 @@ const App: React.FC = () => {
   const [articles, setArticles] = useState<Article[]>([]);
   const [designFiles, setDesignFiles] = useState<DesignFile[]>([]);
   const [aiPrompts, setAiPrompts] = useState<AIPrompt[]>([]);
+  const [fontsList, setFontsList] = useState<VietnameseFont[]>([]);
 
   // Consolidate data initialization and sync
   useEffect(() => {
@@ -74,14 +77,16 @@ const App: React.FC = () => {
       setDesignFiles(getLocal('ictc_design_files', INITIAL_DESIGN_FILES));
       setAiPrompts(getLocal('ictc_ai_prompts', INITIAL_AI_PROMPTS));
       setArticles(getLocal('ictc_articles', INITIAL_ARTICLES));
+      setFontsList(getLocal('ictc_vietnamese_fonts', VIETNAMESE_FONTS_DATA));
 
       // 2. Fetch fresh data from Cloud
       try {
-        const [config, designs, prompts, arts] = await Promise.all([
+        const [config, designs, prompts, arts, dbFonts] = await Promise.all([
           fetchSystemConfig(),
           fetchDesignsFromDb(),
           fetchPromptsFromDb(),
-          fetchArticlesFromDb()
+          fetchArticlesFromDb(),
+          fetchFontsFromDb()
         ]);
 
         if (config) {
@@ -99,6 +104,10 @@ const App: React.FC = () => {
         if (arts?.length) {
           setArticles(arts);
           localStorage.setItem('ictc_articles', JSON.stringify(arts));
+        }
+        if (dbFonts?.length) {
+          setFontsList(dbFonts);
+          localStorage.setItem('ictc_vietnamese_fonts', JSON.stringify(dbFonts));
         }
       } catch (e) {
         console.warn("Cloud sync failed, using local/mock data:", e);
@@ -569,6 +578,11 @@ const App: React.FC = () => {
                 {activeTab === 'designs' && (
                   <DesignHub 
                     currentUser={currentUser} 
+                    files={designFiles}
+                    onFilesUpdate={(updated) => {
+                      setDesignFiles(updated);
+                      localStorage.setItem('ictc_design_files', JSON.stringify(updated));
+                    }}
                     selectedSpecialty={selectedSpecialty}
                     onRequireAuth={handleRequireAuth}
                   />
@@ -576,6 +590,11 @@ const App: React.FC = () => {
                 {activeTab === 'prompts' && (
                   <PromptHub 
                     currentUser={currentUser} 
+                    prompts={aiPrompts}
+                    onPromptsUpdate={(updated) => {
+                      setAiPrompts(updated);
+                      localStorage.setItem('ictc_ai_prompts', JSON.stringify(updated));
+                    }}
                     selectedSpecialty={selectedSpecialty}
                     onRequireAuth={handleRequireAuth}
                   />
@@ -583,6 +602,11 @@ const App: React.FC = () => {
                 {activeTab === 'articles' && (
                   <ArticleHub 
                     currentUser={currentUser} 
+                    articles={articles}
+                    onArticlesUpdate={(updated) => {
+                      setArticles(updated);
+                      localStorage.setItem('ictc_articles', JSON.stringify(updated));
+                    }}
                     selectedSpecialty={selectedSpecialty}
                     onNavigateDesignHub={() => setActiveTab('designs')} 
                     onRequireAuth={handleRequireAuth}
@@ -592,6 +616,11 @@ const App: React.FC = () => {
                   <FontHub 
                     currentUser={currentUser}
                     systemConfig={systemConfig}
+                    fontsList={fontsList}
+                    onFontsUpdate={(updated) => {
+                      setFontsList(updated);
+                      localStorage.setItem('ictc_vietnamese_fonts', JSON.stringify(updated));
+                    }}
                     onRequireAuth={handleRequireAuth}
                   />
                 )}
