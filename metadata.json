@@ -1,5 +1,6 @@
 {
   "name": "ICTC.IO.VN",
   "description": "Nơi chia sẻ và xây dựng mô hình học tập, nghiên cứu toàn quốc",
-  "requestFramePermissions": []
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
