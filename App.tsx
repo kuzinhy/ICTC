@@ -4,6 +4,7 @@ import { DesignHub } from './components/DesignHub';
 import { PromptHub } from './components/PromptHub';
 import { ArticleHub } from './components/ArticleHub';
 import { FontHub } from './components/FontHub';
+import { PersonalPhotoPromptHub } from './components/PersonalPhotoPromptHub';
 import { ContactHub } from './components/ContactHub';
 import { AdminDashboard } from './components/AdminDashboard';
 import { MemberProfile } from './components/MemberProfile';
@@ -21,7 +22,7 @@ import {
 import { VIETNAMESE_FONTS_DATA } from './data/vietnamFontsData';
 import { UserAvatar } from './components/UserAvatar';
 import { 
-  FolderOpen, Sparkles, MessageCircle, LogIn, LogOut, 
+  FolderOpen, Sparkles, MessageCircle, LogIn, LogOut, Camera,
   Shield, User as UserIcon, Settings, HelpCircle, Activity,
   BookOpen, Search, Command, Palette, Scale, ShieldCheck, Type,
   Filter, ChevronDown, Check, Code, GraduationCap, TrendingUp, Award, Layers,
@@ -51,7 +52,7 @@ const SPECIALTY_OPTIONS = [
 
 const App: React.FC = () => {
   const { success: toastSuccess, info: toastInfo } = useToast();
-  const [activeTab, setActiveTab] = useState<'designs' | 'prompts' | 'articles' | 'fonts' | 'contact' | 'admin' | 'profile'>('designs');
+  const [activeTab, setActiveTab] = useState<'designs' | 'prompts' | 'articles' | 'fonts' | 'photo_prompts' | 'contact' | 'admin' | 'profile'>('designs');
   const [selectedSpecialty, setSelectedSpecialty] = useState<string>('all');
   const [isSpecialtyDropdownOpen, setIsSpecialtyDropdownOpen] = useState(false);
   const specialtyDropdownRef = useRef<HTMLDivElement>(null);
@@ -532,6 +533,19 @@ const App: React.FC = () => {
                   <span>Kho AI Prompts</span>
                 </button>
 
+                {/* Prompt ảnh cá nhân tab */}
+                <button
+                  onClick={() => setActiveTab('photo_prompts')}
+                  className={`flex-1 flex items-center justify-center space-x-1.5 py-2 px-2.5 rounded-lg text-[11px] sm:text-xs font-bold transition-all duration-200 whitespace-nowrap shrink-0 sm:shrink ${
+                    activeTab === 'photo_prompts'
+                      ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/10'
+                      : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
+                  }`}
+                >
+                  <Camera className="w-3.5 h-3.5 text-violet-600" />
+                  <span>Prompt Ảnh Cá Nhân</span>
+                </button>
+
                 {/* Bài viết mới tab */}
                 <button
                   onClick={() => setActiveTab('articles')}
@@ -751,6 +765,12 @@ const App: React.FC = () => {
                       localStorage.setItem('ictc_ai_prompts', JSON.stringify(updated));
                     }}
                     selectedSpecialty={selectedSpecialty}
+                    onRequireAuth={handleRequireAuth}
+                  />
+                )}
+                {activeTab === 'photo_prompts' && (
+                  <PersonalPhotoPromptHub 
+                    currentUser={currentUser} 
                     onRequireAuth={handleRequireAuth}
                   />
                 )}
