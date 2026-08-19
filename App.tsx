@@ -210,7 +210,19 @@ const App: React.FC = () => {
       }
     );
 
-    let unsubUsers: (() => void) | null = null;
+    const unsubUsers = onSnapshot(
+      collection(db, 'users'),
+      (snap) => {
+        const items = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
+        if (items.length > 0) {
+          setUserList(items);
+          localStorage.setItem('ictc_registered_users', JSON.stringify(items));
+        }
+      },
+      (error) => {
+        handleFirestoreError(error, OperationType.GET, 'users');
+      }
+    );
 
     // Listen to real Firebase Authentication status
     const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -239,23 +251,12 @@ const App: React.FC = () => {
           setCurrentUser(foundUser);
           localStorage.setItem('ictc_logged_in_user', JSON.stringify(foundUser));
 
-          // If Admin, subscribe to real-time users collection
-          if (foundUser.role === 'Admin') {
-            if (unsubUsers) unsubUsers();
-            unsubUsers = onSnapshot(
-              collection(db, 'users'),
-              (snap) => {
-                const items = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
-                if (items.length > 0) {
-                  setUserList(items);
-                  localStorage.setItem('ictc_registered_users', JSON.stringify(items));
-                }
-              },
-              (error) => {
-                handleFirestoreError(error, OperationType.GET, 'users');
-              }
-            );
-          }
+          setUserList(prev => {
+            const exists = prev.some(u => u.email.toLowerCase() === foundUser.email.toLowerCase());
+            const updated = exists ? prev.map(u => u.email.toLowerCase() === foundUser.email.toLowerCase() ? foundUser : u) : [foundUser, ...prev];
+            localStorage.setItem('ictc_registered_users', JSON.stringify(updated));
+            return updated;
+          });
         } catch (err) {
           console.warn("Error syncing user with Firestore:", err);
           // Fallback to local
@@ -267,10 +268,6 @@ const App: React.FC = () => {
       } else {
         setCurrentUser(null);
         localStorage.removeItem('ictc_logged_in_user');
-        if (unsubUsers) {
-          unsubUsers();
-          unsubUsers = null;
-        }
       }
     });
 
@@ -288,6 +285,14 @@ const App: React.FC = () => {
   const handleLoginSuccess = (user: User) => {
     setCurrentUser(user);
     localStorage.setItem('ictc_logged_in_user', JSON.stringify(user));
+
+    setUserList(prev => {
+      const exists = prev.some(u => u.email.toLowerCase() === user.email.toLowerCase());
+      const updated = exists ? prev.map(u => u.email.toLowerCase() === user.email.toLowerCase() ? user : u) : [user, ...prev];
+      localStorage.setItem('ictc_registered_users', JSON.stringify(updated));
+      return updated;
+    });
+
     toastSuccess(`Xin chào ${user.displayName}! Chúc bạn có trải nghiệm tuyệt vời cùng ICTC.`, 'Đăng nhập thành công');
   };
 
