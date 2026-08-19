@@ -29,7 +29,7 @@ export const DEFAULT_SYSTEM_CONFIG: SystemConfig = {
   allowPublicUploads: true,
   maintenanceMode: false,
   defaultAIModel: 'gemini-2.5-flash',
-  googleAppsScriptUrl: ''
+  googleAppsScriptUrl: 'https://script.google.com/macros/s/AKfycbys4E1WKIm9r21tZ1CiwAcB91x6ruZfPf4bl5jsJbj9DPCcdpG-U9ANDNJhR6wxGEPpsg/exec'
 };
 
 export const INITIAL_DESIGN_FILES: DesignFile[] = [

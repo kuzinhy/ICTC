@@ -85,7 +85,11 @@ const App: React.FC = () => {
         try { return JSON.parse(saved); } catch (e) { return fallback; }
       };
 
-      setSystemConfig(getLocal('ictc_system_config', DEFAULT_SYSTEM_CONFIG));
+      const localCfg = getLocal('ictc_system_config', DEFAULT_SYSTEM_CONFIG);
+      if (!localCfg.googleAppsScriptUrl) {
+        localCfg.googleAppsScriptUrl = DEFAULT_SYSTEM_CONFIG.googleAppsScriptUrl;
+      }
+      setSystemConfig(localCfg);
       setDesignFiles(getLocal('ictc_design_files', INITIAL_DESIGN_FILES));
       setAiPrompts(getLocal('ictc_ai_prompts', INITIAL_AI_PROMPTS));
       setArticles(getLocal('ictc_articles', INITIAL_ARTICLES));
