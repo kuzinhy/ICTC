@@ -28,6 +28,9 @@ export const analyticsPromise = isSupported().then((supported) => {
     return getAnalytics(app);
   }
   return null;
+}).catch((err) => {
+  console.warn("Analytics initialization skipped or not supported:", err);
+  return null;
 });
 
 export default app;

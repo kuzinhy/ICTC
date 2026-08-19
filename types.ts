@@ -139,9 +139,26 @@ export interface BookmarkItem {
   savedAt: string;
 }
 
+export interface CommunityIdea {
+  id: string;
+  title: string;
+  description: string;
+  category: 'Mẫu Slide & Thiết kế' | 'Tính năng mới' | 'Bộ Prompt AI' | 'Học thuật & Đồ án' | 'Sáng kiến Đoàn - Hội';
+  author: string;
+  authorEmail?: string;
+  authorAvatar?: string;
+  createdAt: string;
+  votesCount: number;
+  votedUserIds?: string[];
+  status: 'Mới tiếp nhận' | 'Đang đánh giá' | 'Đang phát triển' | 'Đã nâng cấp';
+  adminNotes?: string;
+  tags?: string[];
+}
+
 export interface SystemConfig {
   siteName: string;
   siteDescription: string;
+  drivePptFolder?: string;
   driveDesignFolder: string;
   drivePromptFolder: string;
   driveFontFolder?: string;

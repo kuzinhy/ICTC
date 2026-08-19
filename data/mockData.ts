@@ -1,7 +1,7 @@
-import { DesignFile, AIPrompt, User, SystemConfig, Article } from '../types';
-import { DRIVE_DESIGN_FOLDER, DRIVE_PROMPT_FOLDER } from './constants';
+import { DesignFile, AIPrompt, User, SystemConfig, Article, CommunityIdea } from '../types';
+import { DRIVE_PPT_FOLDER, DRIVE_DESIGN_FOLDER, DRIVE_PROMPT_FOLDER } from './constants';
 
-export { DRIVE_DESIGN_FOLDER, DRIVE_PROMPT_FOLDER };
+export { DRIVE_PPT_FOLDER, DRIVE_DESIGN_FOLDER, DRIVE_PROMPT_FOLDER };
 
 export const INITIAL_USERS: User[] = [
   {
@@ -20,6 +20,7 @@ export const INITIAL_USERS: User[] = [
 export const DEFAULT_SYSTEM_CONFIG: SystemConfig = {
   siteName: 'ICTC Share & Design',
   siteDescription: 'Nơi chia sẻ và xây dựng mô hình học tập, nghiên cứu toàn quốc',
+  drivePptFolder: DRIVE_PPT_FOLDER,
   driveDesignFolder: DRIVE_DESIGN_FOLDER,
   drivePromptFolder: DRIVE_PROMPT_FOLDER,
   driveFontFolder: DRIVE_DESIGN_FOLDER,
@@ -442,6 +443,48 @@ Hãy tham gia đóng góp những mẫu thiết kế xuất sắc của bạn đ
     tags: ['Thông Báo', 'ICTC', 'Cộng Đồng', 'Tính Năng Mới'],
     isPinned: true,
     status: 'Published'
+  }
+];
+
+export const INITIAL_COMMUNITY_IDEAS: CommunityIdea[] = [
+  {
+    id: 'idea-1',
+    title: 'Xây dựng bộ Template Slide Báo cáo Đại hội Đoàn - Hội Sinh viên Việt Nam',
+    description: 'Cần bổ sung các mẫu slide màu xanh áo xanh thanh niên với bố cục trình chiếu hiện đại, hỗ trợ sơ đồ tổ chức, báo cáo nhiệm kỳ và bảng chỉ tiêu.',
+    category: 'Sáng kiến Đoàn - Hội',
+    author: 'Trần Văn Minh (Sinh viên)',
+    createdAt: '2026-08-15',
+    votesCount: 42,
+    votedUserIds: [],
+    status: 'Đang phát triển',
+    adminNotes: 'Ban Quản Trị đang tổng hợp tư liệu từ Trung ương Đoàn và hoàn thiện bản phác thảo.',
+    tags: ['Đoàn - Hội', 'PowerPoint', 'Thanh niên']
+  },
+  {
+    id: 'idea-2',
+    title: 'Tích hợp AI Generator tự động gợi ý bố cục Slide từ nội dung bài viết',
+    description: 'Cho phép người dùng dán đoạn văn bản báo cáo/tiểu luận, AI sẽ tự phân tích thành các thẻ ý chính và đề xuất màu sắc/layout.',
+    category: 'Tính năng mới',
+    author: 'Lê Hoàng Anh',
+    createdAt: '2026-08-16',
+    votesCount: 38,
+    votedUserIds: [],
+    status: 'Mới tiếp nhận',
+    adminNotes: 'Ý tưởng rất tiềm năng, đang nghiên cứu tích hợp qua Gemini API.',
+    tags: ['AI', 'Automation', 'Slide']
+  },
+  {
+    id: 'idea-3',
+    title: 'Kho Font chữ Việt hóa chuyên dụng cho làm Banner & Infographic',
+    description: 'Bổ sung thêm các font chữ Serif và Sans-serif tiếng Việt nét đậm cá tính dành riêng cho thiết kế Infographic truyền thông.',
+    category: 'Mẫu Slide & Thiết kế',
+    author: 'Nguyễn Thị Hoa',
+    createdAt: '2026-08-17',
+    votesCount: 29,
+    votedUserIds: [],
+    status: 'Đã nâng cấp',
+    adminNotes: 'Đã cập nhật 15+ bộ font Việt hóa mới vào mục Font Việt hóa.',
+    tags: ['Font', 'Infographic', 'Typography']
   }
 ];
 

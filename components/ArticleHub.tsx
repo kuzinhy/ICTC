@@ -20,6 +20,7 @@ import { useToast } from '../context/ToastContext';
 interface ArticleHubProps {
   currentUser: UserType | null;
   articles: Article[];
+  designFiles?: DesignFile[];
   onArticlesUpdate: (updatedArticles: Article[]) => void;
   selectedSpecialty?: string;
   onNavigateDesignHub?: () => void;
@@ -38,6 +39,7 @@ const CATEGORIES = [
 export const ArticleHub: React.FC<ArticleHubProps> = ({ 
   currentUser, 
   articles,
+  designFiles = [],
   onArticlesUpdate,
   selectedSpecialty,
   onNavigateDesignHub,
@@ -597,6 +599,7 @@ export const ArticleHub: React.FC<ArticleHubProps> = ({
           setEditingArticle(null);
         }}
         articleToEdit={editingArticle}
+        designFiles={designFiles}
         onSaveSuccess={handleEditorSaveSuccess}
         currentAuthorName={currentUser?.displayName || 'Thành viên ICTC'}
       />

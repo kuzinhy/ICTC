@@ -14,6 +14,8 @@ import { ArticleReaderModal } from './components/ArticleReaderModal';
 import { CommandSearchModal } from './components/CommandSearchModal';
 import { VietnamDesignPaletteModal } from './components/VietnamDesignPaletteModal';
 import { LegalComplianceModal } from './components/LegalComplianceModal';
+import { IdeaHubModal } from './components/IdeaHubModal';
+import { DesignEditorModal } from './components/DesignEditorModal';
 import { User, SystemConfig, Article, DesignFile, AIPrompt, VietnameseFont } from './types';
 import { 
   INITIAL_USERS, DEFAULT_SYSTEM_CONFIG, INITIAL_DESIGN_FILES, 
@@ -26,7 +28,7 @@ import {
   Shield, User as UserIcon, Settings, HelpCircle, Activity,
   BookOpen, Search, Command, Palette, Scale, ShieldCheck, Type,
   Filter, ChevronDown, Check, Code, GraduationCap, TrendingUp, Award, Layers,
-  Bell
+  Bell, Lightbulb, Zap, Plus
 } from 'lucide-react';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth, db } from './lib/firebase';
@@ -34,7 +36,7 @@ import { onSnapshot, collection } from 'firebase/firestore';
 import { 
   testFirestoreConnection, fetchSystemConfig, fetchDesignsFromDb, 
   fetchPromptsFromDb, fetchUsersFromDb, fetchArticlesFromDb, saveUserToDb,
-  fetchFontsFromDb, updateSystemConfigInDb, deleteUserFromDb,
+  fetchFontsFromDb, updateSystemConfigInDb, deleteUserFromDb, saveDesignToDb,
   handleFirestoreError, OperationType
 } from './lib/db';
 
@@ -67,6 +69,11 @@ const App: React.FC = () => {
   const [aiPrompts, setAiPrompts] = useState<AIPrompt[]>([]);
   const [fontsList, setFontsList] = useState<VietnameseFont[]>([]);
   const [userList, setUserList] = useState<User[]>([]);
+
+  // Idea Hub & Direct Design Upload Modal states
+  const [isIdeaHubOpen, setIsIdeaHubOpen] = useState(false);
+  const [isDirectDesignEditorOpen, setIsDirectDesignEditorOpen] = useState(false);
+  const [directDesignInitialTitle, setDirectDesignInitialTitle] = useState<string | undefined>();
 
   // Count pending items waiting for moderation
   const pendingCount = useMemo(() => {
@@ -368,9 +375,65 @@ const App: React.FC = () => {
     setIsAuthOpen(true);
   };
 
+  const handleSaveDirectDesignSuccess = (savedDesign: DesignFile) => {
+    const existingIndex = designFiles.findIndex(f => f.id === savedDesign.id);
+    let updated: DesignFile[];
+    if (existingIndex >= 0) {
+      updated = designFiles.map(f => f.id === savedDesign.id ? savedDesign : f);
+    } else {
+      updated = [savedDesign, ...designFiles];
+    }
+    setDesignFiles(updated);
+    localStorage.setItem('ictc_design_files', JSON.stringify(updated));
+    saveDesignToDb(savedDesign).catch(console.warn);
+    toastSuccess('Đã đăng tải tệp thiết kế thành công!', 'Thêm file thiết kế');
+    setIsDirectDesignEditorOpen(false);
+    setDirectDesignInitialTitle(undefined);
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans selection:bg-blue-500/10 selection:text-blue-700">
       
+      {/* Top Banner Announcement Bar */}
+      <div className="bg-gradient-to-r from-red-700 via-rose-700 to-amber-700 text-white py-1.5 px-4 text-xs font-semibold relative z-50 shadow-xs">
+        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
+          <div className="flex items-center space-x-2 truncate">
+            <span className="px-2 py-0.5 bg-amber-400 text-slate-950 text-[10px] font-black rounded-md uppercase tracking-wider shrink-0 shadow-xs">
+              🇻🇳 Cổng Tri Thức Số
+            </span>
+            <span className="truncate text-rose-100 text-[11px] sm:text-xs">
+              Hệ sinh thái chia sẻ Slide PowerPoint, AI Prompts & Font chữ Việt hóa dùng chung
+            </span>
+          </div>
+
+          <div className="flex items-center space-x-3 text-[11px] shrink-0">
+            <button
+              onClick={() => setIsPaletteOpen(true)}
+              className="hover:text-amber-300 transition-colors flex items-center space-x-1 cursor-pointer"
+            >
+              <Palette className="w-3 h-3 text-amber-300" />
+              <span className="hidden md:inline">Bảng màu Việt Nam</span>
+            </button>
+            <span className="text-rose-300/40">•</span>
+            <button
+              onClick={() => setIsLegalOpen(true)}
+              className="hover:text-amber-300 transition-colors flex items-center space-x-1 cursor-pointer"
+            >
+              <Scale className="w-3 h-3 text-amber-300" />
+              <span className="hidden md:inline">Quy chuẩn Cờ & Biểu tượng</span>
+            </button>
+            <span className="text-rose-300/40">•</span>
+            <button
+              onClick={() => setIsIdeaHubOpen(true)}
+              className="hover:text-amber-300 transition-colors flex items-center space-x-1 text-amber-200 font-bold cursor-pointer"
+            >
+              <Lightbulb className="w-3 h-3 text-amber-300" />
+              <span>Gửi ý tưởng</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* Upper Top Navbar */}
       <nav className="bg-white border-b border-slate-200/80 sticky top-0 z-40 shadow-xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
@@ -507,136 +570,91 @@ const App: React.FC = () => {
           {/* Primary View Tab Switcher */}
           <div className="max-w-6xl mx-auto my-6" id="primary-tab-switcher">
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
-              {/* Tab Navigation Buttons */}
-              <div className="flex-1 bg-white p-1 rounded-xl border border-slate-200/80 shadow-sm flex overflow-x-auto no-scrollbar gap-0.5 scroll-smooth">
-                <button
-                  onClick={() => setActiveTab('designs')}
-                  className={`flex-1 flex items-center justify-center space-x-1.5 py-2 px-2.5 rounded-lg text-[11px] sm:text-xs font-bold transition-all duration-200 whitespace-nowrap shrink-0 sm:shrink ${
-                    activeTab === 'designs'
-                      ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/10'
-                      : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
-                  }`}
-                >
-                  <FolderOpen className="w-3.5 h-3.5" />
-                  <span>Thư viện Thiết kế</span>
-                </button>
+              {/* Tab Navigation Buttons with Framer Motion Icon Scaling and Smooth Sliding Pill */}
+              <div className="flex-1 bg-white p-1 rounded-xl border border-slate-200/80 shadow-sm flex overflow-x-auto no-scrollbar gap-0.5 scroll-smooth relative">
+                {[
+                  { id: 'designs', label: 'Thư viện Thiết kế', icon: FolderOpen },
+                  { id: 'prompts', label: 'Kho AI Prompts', icon: Sparkles },
+                  { id: 'photo_prompts', label: 'Prompt Ảnh Cá Nhân', icon: Camera, iconColor: 'text-violet-600' },
+                  { id: 'articles', label: 'Bài viết & Tin tức', icon: BookOpen },
+                  { id: 'fonts', label: 'Font Việt hóa', icon: Type },
+                  { id: 'contact', label: 'Liên hệ', icon: MessageCircle },
+                  ...(currentUser ? [{ id: 'profile', label: 'Hồ sơ', icon: UserIcon }] : []),
+                  ...(currentUser?.role === 'Admin' ? [{ id: 'admin', label: 'Quản trị', icon: Shield, isAdmin: true }] : []),
+                ].map((tab) => {
+                  const isActive = activeTab === tab.id;
+                  const IconComp = tab.icon;
 
-                <button
-                  onClick={() => setActiveTab('prompts')}
-                  className={`flex-1 flex items-center justify-center space-x-1.5 py-2 px-2.5 rounded-lg text-[11px] sm:text-xs font-bold transition-all duration-200 whitespace-nowrap shrink-0 sm:shrink ${
-                    activeTab === 'prompts'
-                      ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/10'
-                      : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
-                  }`}
-                >
-                  <Sparkles className="w-3.5 h-3.5" />
-                  <span>Kho AI Prompts</span>
-                </button>
-
-                {/* Prompt ảnh cá nhân tab */}
-                <button
-                  onClick={() => setActiveTab('photo_prompts')}
-                  className={`flex-1 flex items-center justify-center space-x-1.5 py-2 px-2.5 rounded-lg text-[11px] sm:text-xs font-bold transition-all duration-200 whitespace-nowrap shrink-0 sm:shrink ${
-                    activeTab === 'photo_prompts'
-                      ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/10'
-                      : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
-                  }`}
-                >
-                  <Camera className="w-3.5 h-3.5 text-violet-600" />
-                  <span>Prompt Ảnh Cá Nhân</span>
-                </button>
-
-                {/* Bài viết mới tab */}
-                <button
-                  onClick={() => setActiveTab('articles')}
-                  className={`flex-1 flex items-center justify-center space-x-1.5 py-2 px-2.5 rounded-lg text-[11px] sm:text-xs font-bold transition-all duration-200 whitespace-nowrap shrink-0 sm:shrink ${
-                    activeTab === 'articles'
-                      ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/10'
-                      : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
-                  }`}
-                >
-                  <BookOpen className="w-3.5 h-3.5" />
-                  <span>Bài viết & Tin tức</span>
-                </button>
-
-                {/* Font Việt hóa tab */}
-                <button
-                  onClick={() => setActiveTab('fonts')}
-                  className={`flex-1 flex items-center justify-center space-x-1.5 py-2 px-2.5 rounded-lg text-[11px] sm:text-xs font-bold transition-all duration-200 whitespace-nowrap shrink-0 sm:shrink ${
-                    activeTab === 'fonts'
-                      ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/10'
-                      : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
-                  }`}
-                >
-                  <Type className="w-3.5 h-3.5" />
-                  <span>Font Việt hóa</span>
-                </button>
-
-                <button
-                  onClick={() => setActiveTab('contact')}
-                  className={`flex-1 flex items-center justify-center space-x-1.5 py-2 px-2.5 rounded-lg text-[11px] sm:text-xs font-bold transition-all duration-200 whitespace-nowrap shrink-0 sm:shrink ${
-                    activeTab === 'contact'
-                      ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/10'
-                      : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
-                  }`}
-                >
-                  <MessageCircle className="w-3.5 h-3.5" />
-                  <span>Liên hệ</span>
-                </button>
-
-                {/* Dynamic Profile tab is visible when currentUser is logged in */}
-                {currentUser && (
-                  <button
-                    onClick={() => setActiveTab('profile')}
-                    className={`flex-1 flex items-center justify-center space-x-1.5 py-2 px-2.5 rounded-lg text-[11px] sm:text-xs font-bold transition-all duration-200 whitespace-nowrap shrink-0 sm:shrink ${
-                      activeTab === 'profile'
-                        ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/10'
-                        : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
-                    }`}
-                  >
-                    <UserIcon className="w-3.5 h-3.5" />
-                    <span>Hồ sơ</span>
-                  </button>
-                )}
-
-                {/* Dynamic Admin tab is ONLY visible when currentUser.role === 'Admin' */}
-                {currentUser && currentUser.role === 'Admin' && (
-                  <button
-                    onClick={() => setActiveTab('admin')}
-                    className={`relative flex-1 flex items-center justify-center space-x-1.5 py-2 px-2.5 rounded-lg text-[11px] sm:text-xs font-bold transition-all duration-200 whitespace-nowrap shrink-0 sm:shrink group ${
-                      activeTab === 'admin'
-                        ? 'bg-purple-600 text-white shadow-sm shadow-purple-500/10'
-                        : 'text-purple-600 hover:text-purple-700 bg-purple-50 hover:bg-purple-100/70 border border-purple-200/50'
-                    }`}
-                  >
-                    <Shield className="w-3.5 h-3.5" />
-                    <span>Quản trị</span>
-
-                    {/* Animated glowing bell and notification indicator when new member content is uploaded */}
-                    {pendingCount > 0 && (
-                      <span className="inline-flex items-center space-x-1 ml-1">
-                        {/* Glowing pulsating beacon dot */}
-                        <span className="relative flex h-2 w-2">
-                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-                          <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500 shadow-sm shadow-rose-500/50"></span>
-                        </span>
-
-                        {/* Animated bell badge with pending count */}
-                        <span 
-                          className={`inline-flex items-center space-x-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-tight ${
-                            activeTab === 'admin'
-                              ? 'bg-rose-500 text-white ring-1 ring-white/30'
-                              : 'bg-rose-600 text-white shadow-xs shadow-rose-600/30'
+                  return (
+                    <motion.button
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id as any)}
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.96 }}
+                      className={`relative flex-1 flex items-center justify-center space-x-1.5 py-2 px-2.5 rounded-lg text-[11px] sm:text-xs font-bold transition-colors duration-200 whitespace-nowrap shrink-0 sm:shrink cursor-pointer select-none ${
+                        isActive
+                          ? 'text-white'
+                          : tab.isAdmin
+                          ? 'text-purple-600 hover:text-purple-700 bg-purple-50/60 hover:bg-purple-100/70 border border-purple-200/50'
+                          : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
+                      }`}
+                    >
+                      {/* Active Sliding Background Pill (Framer Motion layoutId) */}
+                      {isActive && (
+                        <motion.div
+                          layoutId="activeTabBackgroundMain"
+                          className={`absolute inset-0 rounded-lg shadow-sm ${
+                            tab.isAdmin
+                              ? 'bg-purple-600 shadow-purple-500/25'
+                              : 'bg-blue-600 shadow-blue-500/20'
                           }`}
-                          title={`Có ${pendingCount} bài đăng mới của thành viên đang chờ duyệt`}
-                        >
-                          <Bell className="w-2.5 h-2.5 animate-bounce" />
-                          <span>{pendingCount}</span>
+                          transition={{ type: 'spring', stiffness: 400, damping: 32 }}
+                        />
+                      )}
+
+                      {/* Icon with smooth Framer Motion scale-up effect */}
+                      <motion.span
+                        animate={{
+                          scale: isActive ? 1.22 : 1,
+                          y: isActive ? -1 : 0,
+                        }}
+                        transition={{
+                          type: 'spring',
+                          stiffness: 400,
+                          damping: 25,
+                        }}
+                        className="relative z-10 inline-flex items-center justify-center shrink-0"
+                      >
+                        <IconComp className={`w-3.5 h-3.5 ${tab.iconColor && !isActive ? tab.iconColor : ''}`} />
+                      </motion.span>
+
+                      {/* Tab Title Label */}
+                      <span className="relative z-10">{tab.label}</span>
+
+                      {/* Pending count notification badge for Admin Tab */}
+                      {tab.isAdmin && pendingCount > 0 && (
+                        <span className="relative z-10 inline-flex items-center space-x-1 ml-1">
+                          <span className="relative flex h-2 w-2">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500 shadow-sm shadow-rose-500/50"></span>
+                          </span>
+
+                          <span 
+                            className={`inline-flex items-center space-x-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-black tracking-tight ${
+                              isActive
+                                ? 'bg-rose-500 text-white ring-1 ring-white/30'
+                                : 'bg-rose-600 text-white shadow-xs shadow-rose-600/30'
+                            }`}
+                            title={`Có ${pendingCount} bài đăng mới đang chờ duyệt`}
+                          >
+                            <Bell className="w-2.5 h-2.5 animate-bounce" />
+                            <span>{pendingCount}</span>
+                          </span>
                         </span>
-                      </span>
-                    )}
-                  </button>
-                )}
+                      )}
+                    </motion.button>
+                  );
+                })}
               </div>
 
               {/* Specialty Filter Dropdown */}
@@ -778,6 +796,7 @@ const App: React.FC = () => {
                   <ArticleHub 
                     currentUser={currentUser} 
                     articles={articles}
+                    designFiles={designFiles}
                     onArticlesUpdate={(updated) => {
                       setArticles(updated);
                       localStorage.setItem('ictc_articles', JSON.stringify(updated));
@@ -804,6 +823,21 @@ const App: React.FC = () => {
                   <MemberProfile 
                     currentUser={currentUser} 
                     onUpdateUser={handleUpdateCurrentUser} 
+                    designFiles={designFiles}
+                    aiPrompts={aiPrompts}
+                    articles={articles}
+                    onDesignUpdate={(updated) => {
+                      setDesignFiles(updated);
+                      localStorage.setItem('ictc_design_files', JSON.stringify(updated));
+                    }}
+                    onPromptUpdate={(updated) => {
+                      setAiPrompts(updated);
+                      localStorage.setItem('ictc_ai_prompts', JSON.stringify(updated));
+                    }}
+                    onArticleUpdate={(updated) => {
+                      setArticles(updated);
+                      localStorage.setItem('ictc_articles', JSON.stringify(updated));
+                    }}
                   />
                 )}
                 {activeTab === 'admin' && currentUser?.role === 'Admin' && (
@@ -970,6 +1004,48 @@ const App: React.FC = () => {
         onClose={() => setIsLegalOpen(false)}
         initialTab={legalTab}
       />
+
+      {/* Idea Hub & Innovations Modal */}
+      {isIdeaHubOpen && (
+        <IdeaHubModal
+          currentUser={currentUser}
+          onClose={() => setIsIdeaHubOpen(false)}
+          onRequireAuth={handleRequireAuth}
+          onOpenCreateDesign={(title) => {
+            setDirectDesignInitialTitle(title);
+            setIsDirectDesignEditorOpen(true);
+          }}
+        />
+      )}
+
+      {/* Quick Direct Design Editor Modal */}
+      {isDirectDesignEditorOpen && (
+        <DesignEditorModal
+          isOpen={isDirectDesignEditorOpen}
+          designFile={directDesignInitialTitle ? {
+            id: `des-${Date.now()}`,
+            title: directDesignInitialTitle,
+            description: '',
+            category: 'PowerPoint Templates',
+            fileType: 'PPTX',
+            fileSize: '10.0 MB',
+            driveUrl: systemConfig.driveDesignFolder || '',
+            previewUrl: '',
+            tags: ['Mới', 'Slide'],
+            downloadsCount: 0,
+            rating: 5.0,
+            createdAt: new Date().toISOString().split('T')[0],
+            author: currentUser ? `${currentUser.displayName} (${currentUser.role})` : 'Thành viên ICTC',
+            status: currentUser?.role === 'Admin' || currentUser?.role === 'Creator' ? 'Approved' : 'Pending'
+          } : null}
+          systemConfig={systemConfig}
+          onClose={() => {
+            setIsDirectDesignEditorOpen(false);
+            setDirectDesignInitialTitle(undefined);
+          }}
+          onSaveSuccess={handleSaveDirectDesignSuccess}
+        />
+      )}
 
       {/* Global Toast Notification System */}
       <ToastContainer />

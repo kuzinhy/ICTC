@@ -3,13 +3,14 @@ import {
   X, Save, Eye, Sparkles, Image as ImageIcon, BookOpen, 
   Tag, Clock, Pin, Check, AlertCircle, FileText, Upload
 } from 'lucide-react';
-import { Article } from '../types';
+import { Article, DesignFile } from '../types';
 import { saveArticleToDb } from '../lib/db';
 
 interface ArticleEditorModalProps {
   isOpen: boolean;
   onClose: () => void;
   articleToEdit?: Article | null;
+  designFiles?: DesignFile[];
   onSaveSuccess: (article: Article) => void;
   currentAuthorName: string;
 }
@@ -35,6 +36,7 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
   isOpen,
   onClose,
   articleToEdit,
+  designFiles = [],
   onSaveSuccess,
   currentAuthorName
 }) => {
@@ -334,6 +336,36 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
                     * Tùy chọn: Nhập link ảnh thay thế khi ảnh bìa chính gặp sự cố kết nối hoặc không hiển thị được.
                   </p>
                 </div>
+
+                {/* Quick select from Design Files */}
+                {designFiles && designFiles.length > 0 && (
+                  <div className="space-y-1 pt-2">
+                    <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">📂 Hoặc chọn lấy ảnh đại diện tự động từ File / Tài nguyên thiết kế</label>
+                    <select
+                      onChange={(e) => {
+                        const fileId = e.target.value;
+                        const found = designFiles.find(f => f.id === fileId);
+                        if (found) {
+                          setCoverImage(found.previewUrl);
+                          if (found.fallbackPreviewUrl) {
+                            setFallbackCoverImage(found.fallbackPreviewUrl);
+                          } else {
+                            setFallbackCoverImage(found.previewUrl);
+                          }
+                        }
+                      }}
+                      defaultValue=""
+                      className="w-full bg-slate-50 text-slate-900 px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-semibold focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                    >
+                      <option value="" disabled>-- Chọn file thiết kế để tự động đồng bộ ảnh bìa --</option>
+                      {designFiles.map(df => (
+                        <option key={df.id} value={df.id}>
+                          [{df.fileType}] {df.title} ({df.category})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
 
               {/* Content Markdown Editor */}

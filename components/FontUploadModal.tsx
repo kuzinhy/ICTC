@@ -410,7 +410,7 @@ export const FontUploadModal: React.FC<FontUploadModalProps> = ({
                     <span>Thư mục chỉ định của Nguyễn Huy:</span>
                   </p>
                   <p className="text-slate-500 text-[11px] leading-relaxed">
-                    Vui lòng tải tệp tin của bạn lên thư mục con <strong className="text-blue-700 font-bold">/Font</strong> nằm trong thư mục dùng chung <strong className="text-slate-700">Tainguyenchiase</strong>.
+                    Vui lòng tải tệp tin của bạn lên thư mục con <strong className="text-blue-700 font-bold">/Font</strong> nằm trong thư mục dùng chung <strong className="text-slate-700">ICTC_Shared_Resources</strong>.
                   </p>
                 </div>
                 <a

@@ -6,6 +6,73 @@ import {
 import { DesignFile, User } from '../types';
 import { scanContentSafety } from '../lib/contentModeration';
 import { uploadFileToGoogleDrive, getActiveAppsScriptUrl } from '../lib/appsScriptUploader';
+import { DRIVE_PPT_FOLDER, DRIVE_DESIGN_FOLDER, DRIVE_PROMPT_FOLDER } from '../data/constants';
+
+export const PRESET_FILE_ICONS = [
+  {
+    ext: 'PPTX',
+    label: 'PowerPoint',
+    iconName: '📊',
+    badgeClass: 'bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100',
+    url: 'https://images.unsplash.com/photo-1542744094-3a31f103e35f?auto=format&fit=crop&w=800&q=80'
+  },
+  {
+    ext: 'ZIP',
+    label: 'Nén ZIP/RAR',
+    iconName: '📦',
+    badgeClass: 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100',
+    url: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=800&q=80'
+  },
+  {
+    ext: 'PSD',
+    label: 'Photoshop',
+    iconName: '🎨',
+    badgeClass: 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100',
+    url: 'https://images.unsplash.com/photo-1626785774573-4b799315345d?auto=format&fit=crop&w=800&q=80'
+  },
+  {
+    ext: 'AI',
+    label: 'Illustrator',
+    iconName: '✏️',
+    badgeClass: 'bg-yellow-50 text-yellow-800 border-yellow-200 hover:bg-yellow-100',
+    url: 'https://images.unsplash.com/photo-1600132806370-bf17e65e942f?auto=format&fit=crop&w=800&q=80'
+  },
+  {
+    ext: 'CDR',
+    label: 'CorelDraw',
+    iconName: '📐',
+    badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100',
+    url: 'https://images.unsplash.com/photo-1561070791-2526d30994b5?auto=format&fit=crop&w=800&q=80'
+  },
+  {
+    ext: 'PDF',
+    label: 'Tài liệu PDF',
+    iconName: '📄',
+    badgeClass: 'bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100',
+    url: 'https://images.unsplash.com/photo-1568667256549-094345857637?auto=format&fit=crop&w=800&q=80'
+  },
+  {
+    ext: 'DOCX',
+    label: 'Word',
+    iconName: '📝',
+    badgeClass: 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100',
+    url: 'https://images.unsplash.com/photo-1455390582262-044cdead277a?auto=format&fit=crop&w=800&q=80'
+  },
+  {
+    ext: 'XLSX',
+    label: 'Excel',
+    iconName: '📈',
+    badgeClass: 'bg-teal-50 text-teal-700 border-teal-200 hover:bg-teal-100',
+    url: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=800&q=80'
+  },
+  {
+    ext: 'CANVA',
+    label: 'Canva',
+    iconName: '✨',
+    badgeClass: 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100',
+    url: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=800&q=80'
+  }
+];
 
 interface DesignEditorModalProps {
   isOpen: boolean;
@@ -77,6 +144,20 @@ export const DesignEditorModal: React.FC<DesignEditorModalProps> = ({
       // Auto detect file extension
       const ext = file.name.split('.').pop()?.toUpperCase() || 'PPTX';
       setFileType(ext);
+
+      // Auto match preset cover icon
+      const upperExt = ext.toUpperCase();
+      const matched = PRESET_FILE_ICONS.find(p => 
+        p.ext === upperExt || 
+        (upperExt === 'PPT' && p.ext === 'PPTX') || 
+        (upperExt === 'RAR' && p.ext === 'ZIP') || 
+        (upperExt === '7Z' && p.ext === 'ZIP') || 
+        (upperExt === 'DOC' && p.ext === 'DOCX') || 
+        (upperExt === 'XLS' && p.ext === 'XLSX')
+      );
+      if (matched) {
+        setPreviewUrl(matched.url);
+      }
     }
   };
 
@@ -199,6 +280,10 @@ export const DesignEditorModal: React.FC<DesignEditorModalProps> = ({
     onSave(fileData);
   };
 
+  const isPptFormat = fileType.toUpperCase().includes('PPT') || category.toLowerCase().includes('powerpoint');
+  const targetFolderName = isPptFormat ? '/Powerpoint' : '/Thietke';
+  const targetFolderUrl = isPptFormat ? DRIVE_PPT_FOLDER : DRIVE_DESIGN_FOLDER;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-fade-in">
       <div className="bg-white border border-slate-100 rounded-3xl w-full max-w-xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
@@ -285,7 +370,7 @@ export const DesignEditorModal: React.FC<DesignEditorModalProps> = ({
             <div className="sm:col-span-2 space-y-1.5 pt-2">
               <label className="text-[11px] font-black text-slate-800 uppercase tracking-wider flex items-center justify-between">
                 <span>Liên kết Google Drive tải file gốc</span>
-                <span className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded font-mono font-bold">Thư mục con: /Thietke</span>
+                <span className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded font-mono font-bold">Thư mục con: {targetFolderName}</span>
               </label>
 
               <div className="border border-blue-100 rounded-2xl overflow-hidden bg-gradient-to-b from-blue-50/50 to-indigo-50/20 p-4 space-y-4">
@@ -298,17 +383,21 @@ export const DesignEditorModal: React.FC<DesignEditorModalProps> = ({
                       <span>Thư mục chỉ định của Nguyễn Huy:</span>
                     </p>
                     <p className="text-slate-500 text-[11px] leading-relaxed">
-                      Vui lòng tải thiết kế của bạn lên thư mục con <strong className="text-blue-700 font-bold">/Thietke</strong> nằm trong thư mục dùng chung <strong className="text-slate-700">Tainguyenchiase</strong>.
+                      {isPptFormat ? (
+                        <>Vui lòng tải file PowerPoint (.ppt, .pptx) của bạn lên thư mục <strong className="text-blue-700 font-bold">/Powerpoint</strong>.</>
+                      ) : (
+                        <>Vui lòng tải file thiết kế (.ai, .cdr, .psd, .zip) của bạn lên thư mục <strong className="text-blue-700 font-bold">/Thietke</strong>.</>
+                      )}
                     </p>
                   </div>
                   <a
-                    href="https://drive.google.com/drive/folders/1adp9EiA1GTNFSaq2g0cz8dJbr1YpDzFd"
+                    href={targetFolderUrl}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center space-x-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-md shadow-blue-500/20 transition-all shrink-0 font-sans"
                   >
                     <FolderPlus className="w-4 h-4" />
-                    <span>Mở thư mục /Thietke</span>
+                    <span>Mở thư mục {targetFolderName}</span>
                     <ExternalLink className="w-3 h-3 opacity-80" />
                   </a>
                 </div>
@@ -421,28 +510,78 @@ export const DesignEditorModal: React.FC<DesignEditorModalProps> = ({
               </div>
             </div>
 
-            {/* Preview Cover URL */}
-            <div className="sm:col-span-2 space-y-1">
-              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Ảnh bìa minh họa (Preview Image URL)</label>
-              <input
-                type="url"
-                required
-                value={previewUrl}
-                onChange={(e) => setPreviewUrl(e.target.value)}
-                placeholder="https://images.unsplash.com/photo-..."
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white"
-              />
+            {/* Preview Cover URL & Preset Format Icon Selector */}
+            <div className="sm:col-span-2 space-y-2.5 pt-2 border-t border-slate-100">
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] font-bold text-slate-800 uppercase tracking-wider">
+                  Link ảnh đại diện (Thumbnail) / Biểu tượng minh họa
+                </label>
+                <span className="text-[10px] text-blue-600 font-bold bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200">
+                  Có sẵn biểu tượng định dạng
+                </span>
+              </div>
+
+              {/* Preset Icon Buttons Grid */}
+              <div className="p-3 bg-slate-50 border border-slate-200/80 rounded-2xl space-y-2">
+                <span className="text-[10px] font-bold text-slate-500 block uppercase">
+                  1. Chọn nhanh biểu tượng định dạng tệp có sẵn:
+                </span>
+                <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+                  {PRESET_FILE_ICONS.map((preset) => {
+                    const isSelected = previewUrl === preset.url;
+                    return (
+                      <button
+                        key={preset.ext}
+                        type="button"
+                        onClick={() => setPreviewUrl(preset.url)}
+                        className={`flex items-center space-x-1.5 px-2.5 py-2 rounded-xl border text-[11px] font-bold transition-all text-left ${
+                          isSelected 
+                            ? 'border-blue-600 ring-2 ring-blue-500/20 bg-blue-600 text-white shadow-xs' 
+                            : `${preset.badgeClass} bg-white shadow-3xs`
+                        }`}
+                      >
+                        <span className="text-sm shrink-0">{preset.iconName}</span>
+                        <span className="truncate">{preset.label}</span>
+                        {isSelected && <Check className="w-3 h-3 text-white ml-auto shrink-0" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Input for direct custom URL */}
+              <div className="space-y-1">
+                <span className="text-[10px] font-bold text-slate-500 block uppercase">
+                  2. HOẶC điền link ảnh đại diện tùy chỉnh (Image URL):
+                </span>
+                <input
+                  type="url"
+                  required
+                  value={previewUrl}
+                  onChange={(e) => setPreviewUrl(e.target.value)}
+                  placeholder="https://images.unsplash.com/photo-... hoặc https://drive.google.com/..."
+                  className="w-full bg-white border border-slate-200 rounded-xl p-3 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
               {previewUrl && (
-                <div className="pt-2">
-                  <p className="text-[10px] text-slate-400 font-bold mb-1">Ảnh xem trước hiện tại:</p>
-                  <img
-                    src={previewUrl}
-                    alt="Preview cover"
-                    className="w-full h-32 rounded-xl object-cover border border-slate-200 shadow-2xs"
-                    onError={(e) => {
-                      (e.target as any).src = 'https://images.unsplash.com/photo-1542744094-3a31f103e35f?auto=format&fit=crop&w=800&q=80';
-                    }}
-                  />
+                <div className="pt-1">
+                  <p className="text-[10px] text-slate-500 font-bold mb-1">Xem trước ảnh đại diện hiện tại:</p>
+                  <div className="relative group rounded-xl overflow-hidden border border-slate-200 shadow-2xs">
+                    <img
+                      src={previewUrl}
+                      alt="Preview cover"
+                      className="w-full h-32 object-cover"
+                      onError={(e) => {
+                        (e.target as any).src = 'https://images.unsplash.com/photo-1542744094-3a31f103e35f?auto=format&fit=crop&w=800&q=80';
+                      }}
+                    />
+                    <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <span className="text-white text-xs font-bold px-3 py-1 bg-slate-900/80 rounded-lg">
+                        Đang sử dụng ảnh đại diện này
+                      </span>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>

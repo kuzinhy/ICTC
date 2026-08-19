@@ -64,7 +64,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onLoginSu
   const recordSecurityLog = (eventType: SecurityAuditLog['eventType'], severity: SecurityAuditLog['severity'], details: string, userEmail: string, userName: string) => {
     try {
       const savedLogs = localStorage.getItem('ictc_security_logs');
-      let logs: SecurityAuditLog[] = savedLogs ? JSON.parse(savedLogs) : [];
+      let logs: SecurityAuditLog[] = [];
+      if (savedLogs) {
+        try { logs = JSON.parse(savedLogs); } catch (e) {}
+      }
       const newLog: SecurityAuditLog = {
         id: `log-${Date.now()}`,
         timestamp: new Date().toISOString().replace('T', ' ').slice(0, 19),

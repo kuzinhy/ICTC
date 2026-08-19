@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Camera, Sparkles, Copy, Check, Upload, Wand2, 
-  Heart, Layers, HelpCircle, FileText, Search, Plus, X
+  Heart, Layers, HelpCircle, FileText, Search, Plus, X,
+  Bookmark, BookmarkCheck
 } from 'lucide-react';
 import { User } from '../types';
 import { useToast } from '../context/ToastContext';
@@ -176,6 +177,58 @@ export const PersonalPhotoPromptHub: React.FC<PersonalPhotoPromptHubProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [viewingPrompt, setViewingPrompt] = useState<PersonalPhotoPromptItem | null>(null);
+  const [bookmarkedIds, setBookmarkedIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    const saved = localStorage.getItem('ictc_bookmarks');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        setBookmarkedIds(parsed.map((b: any) => b.targetId));
+      } catch (e) {}
+    }
+  }, []);
+
+  const handleToggleBookmark = (item: PersonalPhotoPromptItem, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!currentUser) {
+      if (onRequireAuth) {
+        onRequireAuth('Vui lòng đăng nhập để lưu câu lệnh AI này vào danh sách Yêu thích!');
+      }
+      return;
+    }
+
+    const savedBookmarks = localStorage.getItem('ictc_bookmarks');
+    let bookmarks: any[] = [];
+    if (savedBookmarks) {
+      try { bookmarks = JSON.parse(savedBookmarks); } catch (e) {}
+    }
+
+    const isAlready = bookmarks.some((b: any) => b.targetId === item.id);
+    if (isAlready) {
+      bookmarks = bookmarks.filter((b: any) => b.targetId !== item.id);
+      setBookmarkedIds(prev => prev.filter(id => id !== item.id));
+      toastInfo(`Đã bỏ "${item.title}" khỏi danh sách Yêu thích.`, 'Bỏ lưu thành công');
+    } else {
+      bookmarks.push({
+        id: `bm-${Date.now()}`,
+        targetId: item.id,
+        type: 'prompt',
+        title: item.title,
+        category: item.category,
+        toolType: item.recommendedTool,
+        promptText: item.promptTemplate,
+        previewUrl: item.imageUrl,
+        author: item.author,
+        savedAt: new Date().toISOString().split('T')[0]
+      });
+      setBookmarkedIds(prev => [...prev, item.id]);
+      toastSuccess(`Đã lưu "${item.title}" vào danh sách Yêu thích của bạn!`, 'Đã lưu prompt');
+    }
+
+    localStorage.setItem('ictc_bookmarks', JSON.stringify(bookmarks));
+    window.dispatchEvent(new Event('storage'));
+  };
 
   // Contribute Modal State
   const [isSubmitModalOpen, setIsSubmitModalOpen] = useState(false);
@@ -552,12 +605,23 @@ export const PersonalPhotoPromptHub: React.FC<PersonalPhotoPromptHubProps> = ({
               <div className="flex items-center space-x-2">
                 <button
                   onClick={(e) => handleLike(item.id, e)}
-                  className="flex items-center space-x-1 text-xs font-semibold text-rose-500 hover:bg-rose-50 px-2.5 py-1.5 rounded-xl transition-colors"
+                  className="flex items-center space-x-1 text-xs font-semibold text-rose-500 hover:bg-rose-50 px-2 py-1.5 rounded-xl transition-colors"
                 >
                   <Heart className="w-3.5 h-3.5 fill-rose-500" />
                   <span>{item.likesCount}</span>
                 </button>
-                <span className="text-xs text-slate-400">| {item.author}</span>
+                <button
+                  onClick={(e) => handleToggleBookmark(item, e)}
+                  className={`p-1.5 rounded-xl border transition-all ${
+                    bookmarkedIds.includes(item.id)
+                      ? 'bg-violet-50 text-violet-600 border-violet-200 shadow-2xs'
+                      : 'bg-white text-slate-400 hover:text-violet-600 hover:bg-violet-50/50 border-slate-200'
+                  }`}
+                  title={bookmarkedIds.includes(item.id) ? "Bỏ yêu thích" : "Lưu vào yêu thích"}
+                >
+                  <Bookmark className={`w-3.5 h-3.5 ${bookmarkedIds.includes(item.id) ? 'fill-violet-600 text-violet-600' : ''}`} />
+                </button>
+                <span className="text-xs text-slate-400 truncate max-w-[80px]">| {item.author.split(' ')[0]}</span>
               </div>
 
               <div className="flex items-center space-x-2">
@@ -728,10 +792,20 @@ export const PersonalPhotoPromptHub: React.FC<PersonalPhotoPromptHubProps> = ({
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700">Link ảnh minh họa (URL)</label>
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-700">Link ảnh minh họa (URL)</label>
+                  <a 
+                    href="https://drive.google.com/drive/folders/1U5R1I8f4ZjqqIKe0KZ16iMf6I3jK5T0z" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-[11px] text-violet-600 font-bold hover:underline inline-flex items-center space-x-1"
+                  >
+                    <span>Mở thư mục /PromtAi</span>
+                  </a>
+                </div>
                 <input
                   type="url"
-                  placeholder="https://images.unsplash.com/..."
+                  placeholder="https://drive.google.com/... hoặc link ảnh trực tiếp"
                   value={newPromptForm.imageUrl}
                   onChange={(e) => setNewPromptForm({ ...newPromptForm, imageUrl: e.target.value })}
                   className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-violet-500"

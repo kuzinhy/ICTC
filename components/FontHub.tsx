@@ -14,6 +14,7 @@ import { DRIVE_DESIGN_FOLDER } from '../data/constants';
 import { FontUploadModal } from './FontUploadModal';
 import { ReportViolationModal } from './ReportViolationModal';
 import { VipUpgradeModal } from './VipUpgradeModal';
+import { FontCompareModal } from './FontCompareModal';
 import { fetchFontsFromDb, saveFontToDb } from '../lib/db';
 import { User, SystemConfig } from '../types';
 import { useToast } from '../context/ToastContext';
@@ -60,6 +61,7 @@ export const FontHub: React.FC<FontHubProps> = ({
   const [selectedFontForCdn, setSelectedFontForCdn] = useState<VietnameseFont | null>(null);
   const [reportingItem, setReportingItem] = useState<{ id: string; title: string } | null>(null);
   const [isVipModalOpen, setIsVipModalOpen] = useState(false);
+  const [isCompareModalOpen, setIsCompareModalOpen] = useState(false);
 
   // Dynamically load Google Fonts stylesheets into document.head so all preview specimens render accurately
   useEffect(() => {
@@ -137,6 +139,16 @@ export const FontHub: React.FC<FontHubProps> = ({
     toastSuccess(`Đã thêm font "${newFont.name}" vào thư viện font hệ thống!`, 'Thêm Font mới');
   };
 
+  const handleDownloadFont = (font: VietnameseFont) => {
+    if (!currentUser && onRequireAuth) {
+      onRequireAuth('Vui lòng đăng nhập để tải tệp Font chữ Việt hóa về máy tính!');
+      return;
+    }
+    const targetUrl = font.downloadUrl || (systemConfig?.driveFontFolder || DRIVE_DESIGN_FOLDER);
+    window.open(targetUrl, '_blank');
+    toastSuccess(`Đã mở liên kết tải xuống cho font "${font.name}"!`, 'Tải về Font');
+  };
+
   const driveFontFolderUrl = systemConfig?.driveFontFolder || systemConfig?.sharedUploadDriveUrl || DRIVE_DESIGN_FOLDER;
 
   return (
@@ -178,6 +190,14 @@ export const FontHub: React.FC<FontHubProps> = ({
           </div>
           
           <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto shrink-0 z-10">
+            <button
+              onClick={() => setIsCompareModalOpen(true)}
+              className="flex items-center justify-center px-4 py-3.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-sm rounded-2xl transition-all duration-200 shadow-md shadow-amber-500/20 active:scale-95 border border-amber-300 cursor-pointer"
+            >
+              <Type className="w-4 h-4 mr-2 text-slate-950" />
+              So sánh Font Side-by-Side
+            </button>
+
             <button
               onClick={() => {
                 if (!currentUser && onRequireAuth) {
@@ -813,6 +833,13 @@ export const FontHub: React.FC<FontHubProps> = ({
         currentUser={currentUser}
       />
 
+      {/* FONT COMPARE MODAL */}
+      <FontCompareModal
+        fontsList={fontsList}
+        isOpen={isCompareModalOpen}
+        onClose={() => setIsCompareModalOpen(false)}
+        onDownloadFont={handleDownloadFont}
+      />
     </div>
   );
 };

@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { AIPrompt, User } from '../types';
 import { VipUpgradeModal } from './VipUpgradeModal';
+import { PromptCustomizerModal } from './PromptCustomizerModal';
 import { INITIAL_AI_PROMPTS, PROMPT_CATEGORIES, DRIVE_PROMPT_FOLDER } from '../data/mockData';
 import { optimizePrompt, generateLayoutMockup } from '../lib/gemini';
 import { savePromptToDb, deletePromptFromDb } from '../lib/db';
@@ -96,6 +97,7 @@ export const PromptHub: React.FC<PromptHubProps> = ({ currentUser, prompts, onPr
 
   // Lightbox Modal state
   const [lightboxPrompt, setLightboxPrompt] = useState<AIPrompt | null>(null);
+  const [customizingPromptItem, setCustomizingPromptItem] = useState<AIPrompt | null>(null);
 
   const [copiedPromptId, setCopiedPromptId] = useState<string | null>(null);
   const [copiedRawId, setCopiedRawId] = useState<string | null>(null);
@@ -988,7 +990,16 @@ export const PromptHub: React.FC<PromptHubProps> = ({ currentUser, prompts, onPr
                               title="Tải prompt vào sân chơi AI để thử nghiệm và tinh chỉnh"
                             >
                               <PlayCircle className="w-3.5 h-3.5 text-red-500" />
-                              <span>Thử trên AI Sandbox</span>
+                              <span>AI Sandbox</span>
+                            </button>
+
+                            <button
+                              onClick={() => setCustomizingPromptItem(prompt)}
+                              className="px-2.5 py-1 text-slate-700 hover:text-purple-700 hover:bg-purple-50 border border-slate-200 rounded-lg text-[11px] font-bold transition-all flex items-center space-x-1 cursor-pointer"
+                              title="Tinh chỉnh đối tượng, tông giọng & ngữ cảnh trước khi sao chép"
+                            >
+                              <Sparkles className="w-3.5 h-3.5 text-purple-600" />
+                              <span>Tinh chỉnh Prompt</span>
                             </button>
 
                             <button
@@ -1552,6 +1563,16 @@ export const PromptHub: React.FC<PromptHubProps> = ({ currentUser, prompts, onPr
           // Success callback
         }}
       />
+
+      {/* Prompt Customizer Modal */}
+      {customizingPromptItem && (
+        <PromptCustomizerModal
+          promptItem={customizingPromptItem}
+          isOpen={!!customizingPromptItem}
+          onClose={() => setCustomizingPromptItem(null)}
+          onCopySuccess={(msg) => toastSuccess(msg)}
+        />
+      )}
     </div>
   );
 };

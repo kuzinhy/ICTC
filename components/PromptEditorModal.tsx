@@ -7,6 +7,7 @@ import { AIPrompt, User } from '../types';
 import { scanContentSafety } from '../lib/contentModeration';
 import { optimizePrompt } from '../lib/gemini';
 import { uploadFileToGoogleDrive, getActiveAppsScriptUrl } from '../lib/appsScriptUploader';
+import { DRIVE_PROMPT_FOLDER } from '../data/constants';
 
 interface PromptEditorModalProps {
   isOpen: boolean;
@@ -359,17 +360,17 @@ export const PromptEditorModal: React.FC<PromptEditorModalProps> = ({
                       <span>Thư mục chỉ định của Nguyễn Huy:</span>
                     </p>
                     <p className="text-slate-500 text-[11px] leading-relaxed">
-                      Vui lòng tải tệp tin bổ trợ câu lệnh lên thư mục con <strong className="text-purple-700 font-bold">/Promt mẫu</strong> nằm trong thư mục dùng chung <strong className="text-slate-700">Tainguyenchiase</strong>.
+                      Vui lòng tải tệp tin bổ trợ câu lệnh/ảnh mẫu AI lên thư mục con <strong className="text-purple-700 font-bold">/PromtAi</strong> nằm trong thư mục dùng chung <strong className="text-slate-700">ICTC_Shared_Resources</strong>.
                     </p>
                   </div>
                   <a
-                    href="https://drive.google.com/drive/folders/1adp9EiA1GTNFSaq2g0cz8dJbr1YpDzFd"
+                    href={DRIVE_PROMPT_FOLDER}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center space-x-1.5 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl shadow-md shadow-purple-500/20 transition-all shrink-0 font-sans"
                   >
                     <FolderPlus className="w-4 h-4" />
-                    <span>Mở thư mục /Promt mẫu</span>
+                    <span>Mở thư mục /PromtAi</span>
                     <ExternalLink className="w-3 h-3 opacity-80" />
                   </a>
                 </div>

@@ -1,4 +1,5 @@
 import { DEFAULT_SYSTEM_CONFIG } from '../data/mockData';
+import { DRIVE_PPT_FOLDER, DRIVE_DESIGN_FOLDER, DRIVE_PROMPT_FOLDER } from '../data/constants';
 
 export interface AppsScriptUploadParams {
   file: File;
@@ -88,21 +89,33 @@ export async function uploadFileToGoogleDrive(
   onProgress?.(15, 'Đang mã hóa tệp tin sang Base64...');
   const base64 = await fileToBase64(file);
 
-  // Folder names mapping
-  const targetFolderMap: Record<string, string> = {
-    design: 'Thietke',
-    font: 'Font',
-    prompt: 'Promt mẫu',
-    article: 'Thietke'
-  };
-  const folderName = targetFolderMap[contentType] || 'Thietke';
+  // Folder names & URLs mapping based on file type and extension
+  let folderName = 'Thietke';
+  let folderUrl = DRIVE_DESIGN_FOLDER;
+
+  const isPpt = ext === 'PPT' || ext === 'PPTX' || contentType === 'ppt' || contentType === 'pptx';
+  const isPrompt = contentType === 'prompt' || contentType === 'photo_prompt' || contentType === 'PromtAi';
+
+  if (isPpt) {
+    folderName = 'Powerpoint';
+    folderUrl = DRIVE_PPT_FOLDER;
+  } else if (isPrompt) {
+    folderName = 'PromtAi';
+    folderUrl = DRIVE_PROMPT_FOLDER;
+  } else if (contentType === 'font') {
+    folderName = 'Font';
+    folderUrl = DRIVE_DESIGN_FOLDER;
+  } else {
+    folderName = 'Thietke';
+    folderUrl = DRIVE_DESIGN_FOLDER;
+  }
 
   // If no script URL is configured yet, provide clean fallback
   if (!scriptUrl) {
     onProgress?.(100, 'Tệp đã sẵn sàng (Chế độ cục bộ)');
     return {
       success: true,
-      fileUrl: `https://drive.google.com/drive/folders/1adp9EiA1GTNFSaq2g0cz8dJbr1YpDzFd`,
+      fileUrl: folderUrl,
       folderName,
       fileName: file.name,
       fileSize: fileSizeStr,
@@ -137,17 +150,15 @@ export async function uploadFileToGoogleDrive(
 
     onProgress?.(100, `Đã tải thành công tệp lên Google Drive (/${folderName})!`);
 
-    const resultDriveUrl = `https://drive.google.com/drive/folders/1adp9EiA1GTNFSaq2g0cz8dJbr1YpDzFd`;
-
     return {
       success: true,
-      fileUrl: resultDriveUrl,
+      fileUrl: folderUrl,
       folderName,
       fileName: file.name,
       fileSize: fileSizeStr,
       fileType: ext,
       base64,
-      message: `Tệp "${file.name}" đã được phân loại tự động vào thư mục /${folderName} trên Google Drive của Admin!`
+      message: `Tệp "${file.name}" đã được phân loại tự động vào thư mục /${folderName} trên Google Drive!`
     };
   } catch (err: any) {
     console.error("Apps Script upload failed:", err);

@@ -3,10 +3,11 @@ import {
   Search, Download, Star, Tag, FileText, X, Edit, Trash2,
   UploadCloud, Check, ExternalLink, Calendar, User, Eye, Sparkles,
   Lock, Shield, ArrowRight, LogIn, Palette, Scale, ShieldCheck, Flag, AlertTriangle,
-  Crown, Clock
+  Crown, Clock, Bookmark, BookmarkCheck, Heart, Play
 } from 'lucide-react';
 import { DesignFile, User as UserType } from '../types';
 import { VipUpgradeModal } from './VipUpgradeModal';
+import { FullscreenSlideViewerModal } from './FullscreenSlideViewerModal';
 import { INITIAL_DESIGN_FILES, DRIVE_DESIGN_FOLDER } from '../data/mockData';
 import { saveDesignToDb, deleteDesignFromDb } from '../lib/db';
 import { scanContentSafety, submitContentReport } from '../lib/contentModeration';
@@ -30,8 +31,63 @@ export const DesignHub: React.FC<DesignHubProps> = ({ currentUser, files, onFile
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [selectedFile, setSelectedFile] = useState<DesignFile | null>(null);
+  const [bookmarkedIds, setBookmarkedIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    const saved = localStorage.getItem('ictc_bookmarks');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        setBookmarkedIds(parsed.map((b: any) => b.targetId));
+      } catch (e) {}
+    }
+  }, []);
+
+  const handleToggleBookmark = (e: React.MouseEvent, file: DesignFile) => {
+    e.stopPropagation();
+    if (!currentUser) {
+      if (onRequireAuth) {
+        onRequireAuth('Vui lòng đăng nhập để lưu mẫu thiết kế này vào danh sách Yêu thích!');
+      }
+      return;
+    }
+
+    const savedBookmarks = localStorage.getItem('ictc_bookmarks');
+    let bookmarks: any[] = [];
+    if (savedBookmarks) {
+      try { bookmarks = JSON.parse(savedBookmarks); } catch (e) {}
+    }
+
+    const isAlready = bookmarks.some((b: any) => b.targetId === file.id);
+    if (isAlready) {
+      bookmarks = bookmarks.filter((b: any) => b.targetId !== file.id);
+      setBookmarkedIds(prev => prev.filter(id => id !== file.id));
+      toastInfo(`Đã bỏ "${file.title}" khỏi danh sách Yêu thích.`, 'Bỏ lưu thành công');
+    } else {
+      bookmarks.push({
+        id: `bm-${Date.now()}`,
+        targetId: file.id,
+        type: 'design',
+        title: file.title,
+        category: file.category,
+        fileType: file.fileType,
+        previewUrl: file.previewUrl,
+        author: file.author,
+        driveUrl: file.driveUrl,
+        attachedFileData: file.attachedFileData,
+        attachedFileName: file.attachedFileName,
+        savedAt: new Date().toISOString().split('T')[0]
+      });
+      setBookmarkedIds(prev => [...prev, file.id]);
+      toastSuccess(`Đã lưu "${file.title}" vào danh sách Yêu thích của bạn!`, 'Đã lưu thiết kế');
+    }
+
+    localStorage.setItem('ictc_bookmarks', JSON.stringify(bookmarks));
+    window.dispatchEvent(new Event('storage'));
+  };
   
   // Modals
+  const [fullscreenSlideDesign, setFullscreenSlideDesign] = useState<DesignFile | null>(null);
   const [isPaletteOpen, setIsPaletteOpen] = useState(false);
   const [isLegalOpen, setIsLegalOpen] = useState(false);
   const [legalTab, setLegalTab] = useState<'ip_policy' | 'community_rules' | 'ai_ethics' | 'dmca_takedown'>('ip_policy');
@@ -483,6 +539,33 @@ export const DesignHub: React.FC<DesignHubProps> = ({ currentUser, files, onFile
                       </div>
                     )}
 
+                    {/* Hover Quick Action Overlay */}
+                    <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center space-x-2 p-4 backdrop-blur-[2px]">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setFullscreenSlideDesign(file);
+                        }}
+                        className="px-3.5 py-2 bg-slate-900 hover:bg-black text-white rounded-xl shadow-lg border border-slate-700/80 transition-all active:scale-95 flex items-center space-x-1.5 text-xs font-bold cursor-pointer"
+                        title="Trình chiếu Slide Fullscreen"
+                      >
+                        <Play className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+                        <span>Trình chiếu Slide</span>
+                      </button>
+
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedFile(file);
+                        }}
+                        className="px-3 py-2 bg-white/90 hover:bg-white text-slate-900 rounded-xl shadow-lg border border-white transition-all active:scale-95 flex items-center space-x-1 text-xs font-bold cursor-pointer"
+                        title="Xem chi tiết & Tải về"
+                      >
+                        <Eye className="w-3.5 h-3.5 text-blue-600" />
+                        <span>Chi tiết</span>
+                      </button>
+                    </div>
+
                     {/* Owner post controls */}
                     {isOwner && (
                       <div className="absolute bottom-3 right-3 flex space-x-1">
@@ -526,6 +609,17 @@ export const DesignHub: React.FC<DesignHubProps> = ({ currentUser, files, onFile
                   </span>
                   
                   <div className="flex items-center space-x-2">
+                    <button
+                      onClick={(e) => handleToggleBookmark(e, file)}
+                      className={`p-1.5 rounded-lg border transition-all ${
+                        bookmarkedIds.includes(file.id)
+                          ? 'bg-rose-50 text-rose-600 border-rose-200 shadow-xs'
+                          : 'bg-white text-slate-400 hover:text-rose-500 hover:bg-rose-50/50 border-slate-200'
+                      }`}
+                      title={bookmarkedIds.includes(file.id) ? "Bỏ yêu thích" : "Lưu vào yêu thích"}
+                    >
+                      <Heart className={`w-3.5 h-3.5 ${bookmarkedIds.includes(file.id) ? 'fill-rose-500 text-rose-500' : ''}`} />
+                    </button>
                     <span className="flex items-center text-blue-600 font-bold bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-100/50">
                       {currentUser ? <Download className="w-3.5 h-3.5 mr-1" /> : <Lock className="w-3.5 h-3.5 mr-1 text-amber-500" />}
                       {file.downloadsCount.toLocaleString()} tải về
@@ -654,14 +748,25 @@ export const DesignHub: React.FC<DesignHubProps> = ({ currentUser, files, onFile
 
             {/* Action footer */}
             <div className="p-6 bg-slate-50 border-t border-slate-100 flex flex-wrap sm:flex-nowrap items-center justify-between gap-3 shrink-0">
-              <button
-                onClick={() => setReportingItem({ id: selectedFile.id, title: selectedFile.title })}
-                className="px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/80 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5"
-                title="Báo cáo nội dung vi phạm hoặc liên kết hỏng"
-              >
-                <Flag className="w-3.5 h-3.5 fill-rose-600 text-rose-600" />
-                <span>Báo cáo vi phạm</span>
-              </button>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => setReportingItem({ id: selectedFile.id, title: selectedFile.title })}
+                  className="px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200/80 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5"
+                  title="Báo cáo nội dung vi phạm hoặc liên kết hỏng"
+                >
+                  <Flag className="w-3.5 h-3.5 fill-rose-600 text-rose-600" />
+                  <span className="hidden sm:inline">Báo cáo vi phạm</span>
+                </button>
+
+                <button
+                  onClick={() => setFullscreenSlideDesign(selectedFile)}
+                  className="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 shadow-xs cursor-pointer"
+                  title="Mở chế độ trình chiếu Slide Fullscreen"
+                >
+                  <Play className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+                  <span>Trình chiếu Slide</span>
+                </button>
+              </div>
 
               <div className="flex items-center space-x-2">
                 <button
@@ -999,6 +1104,16 @@ export const DesignHub: React.FC<DesignHubProps> = ({ currentUser, files, onFile
           // Visual alert feedback of submission
         }}
       />
+
+      {/* Fullscreen Slide Viewer Modal */}
+      {fullscreenSlideDesign && (
+        <FullscreenSlideViewerModal
+          design={fullscreenSlideDesign}
+          isOpen={!!fullscreenSlideDesign}
+          onClose={() => setFullscreenSlideDesign(null)}
+          onDownload={handleDownload}
+        />
+      )}
     </div>
   );
 };

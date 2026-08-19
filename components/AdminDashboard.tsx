@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
+import { motion } from 'motion/react';
 import { 
   Users, CheckCircle, Settings, Shield, UserX, AlertTriangle, 
   Check, X, ToggleLeft, ToggleRight, Save, Database, Sparkles, Folder, Code,
   BookOpen, Pin, Trash2, Eye, Heart, Clock, ExternalLink, HardDrive,
   MessageSquare, RefreshCw, Filter, Search, ChevronRight, CheckCheck,
   AlertCircle, FileText, ArrowUpRight, Award, Layers, Plus, Edit3, ShieldCheck, Lock,
-  Type, Download, Copy, Share2, Flag, ShieldAlert
+  Type, Download, Copy, Share2, Flag, ShieldAlert, Lightbulb, Zap, ThumbsUp
 } from 'lucide-react';
-import { User, DesignFile, AIPrompt, SystemConfig, Article, ContentReport } from '../types';
-import { DEFAULT_SYSTEM_CONFIG, INITIAL_USERS, INITIAL_ARTICLES, INITIAL_DESIGN_FILES, INITIAL_AI_PROMPTS } from '../data/mockData';
+import { User, DesignFile, AIPrompt, SystemConfig, Article, ContentReport, CommunityIdea } from '../types';
+import { DEFAULT_SYSTEM_CONFIG, INITIAL_USERS, INITIAL_ARTICLES, INITIAL_DESIGN_FILES, INITIAL_AI_PROMPTS, INITIAL_COMMUNITY_IDEAS } from '../data/mockData';
 import { VietnameseFont, VIETNAMESE_FONTS_DATA, FONT_CATEGORIES } from '../data/vietnamFontsData';
 import { DriveUploadResearch } from './DriveUploadResearch';
 import { MemberManagement } from './MemberManagement';
@@ -24,6 +25,8 @@ import {
 } from '../lib/db';
 import { DesignEditorModal } from './DesignEditorModal';
 import { PromptEditorModal } from './PromptEditorModal';
+import { LeaderboardModal } from './LeaderboardModal';
+import { exportDesignsToCSV, exportUsersToCSV, exportFontsToCSV } from '../lib/exportUtils';
 import { useToast } from '../context/ToastContext';
 
 interface AdminDashboardProps {
@@ -61,10 +64,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onConfigUpdate
 }) => {
   const { success: toastSuccess, info: toastInfo, warning: toastWarning } = useToast();
-  const [activeSubTab, setActiveSubTab] = useState<'moderation' | 'reports' | 'articles' | 'fonts' | 'users' | 'security' | 'settings' | 'uploadResearch'>('moderation');
+  const [activeSubTab, setActiveSubTab] = useState<'moderation' | 'reports' | 'articles' | 'fonts' | 'users' | 'security' | 'settings' | 'uploadResearch' | 'ideas'>('moderation');
   const [localConfig, setLocalConfig] = useState<SystemConfig>(systemConfig);
   const [reportsList, setReportsList] = useState<ContentReport[]>([]);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [communityIdeas, setCommunityIdeas] = useState<CommunityIdea[]>([]);
+  const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false);
+
+  // Load Community Ideas
+  useEffect(() => {
+    const saved = localStorage.getItem('ictc_community_ideas');
+    if (saved) {
+      try { setCommunityIdeas(JSON.parse(saved)); } catch (e) { setCommunityIdeas(INITIAL_COMMUNITY_IDEAS); }
+    } else {
+      setCommunityIdeas(INITIAL_COMMUNITY_IDEAS);
+    }
+  }, [activeSubTab]);
 
   // Update local config when prop changes (e.g. after cloud sync)
   useEffect(() => {
@@ -414,95 +429,165 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </div>
 
         {/* Sub-tabs switch */}
-        <div className="flex bg-slate-200/70 p-1 rounded-2xl border border-slate-200 text-xs font-bold gap-1 shrink-0 overflow-x-auto max-w-full">
+        <div className="flex bg-slate-200/70 p-1 rounded-2xl border border-slate-200 text-xs font-bold gap-1 shrink-0 overflow-x-auto max-w-full relative">
+          {[
+            { 
+              id: 'moderation', 
+              label: 'Kiểm duyệt bài', 
+              icon: CheckCircle, 
+              badge: totalPending > 0 ? totalPending : null,
+              badgeColor: 'bg-rose-500 text-white'
+            },
+            { 
+              id: 'reports', 
+              label: 'Báo cáo vi phạm', 
+              icon: Flag, 
+              iconColor: 'text-rose-600',
+              badge: reportsList.filter(r => r.status?.toLowerCase() === 'pending').length > 0 ? reportsList.filter(r => r.status?.toLowerCase() === 'pending').length : null,
+              badgeColor: 'bg-rose-600 text-white'
+            },
+            { id: 'articles', label: `Bài viết (${articlesList.length})`, icon: BookOpen },
+            { id: 'fonts', label: `Quản lý Font (${fontsList.length})`, icon: Type },
+            { id: 'users', label: `Thành viên (${userList.length})`, icon: Users },
+            { id: 'security', label: 'Bảo mật & Phòng vệ', icon: ShieldCheck, iconColor: 'text-emerald-600' },
+            { id: 'settings', label: 'Cấu hình chung', icon: Settings },
+            { id: 'uploadResearch', label: 'Drive Research', icon: HardDrive },
+            { id: 'ideas', label: 'Nâng cấp Ý tưởng', icon: Lightbulb, iconColor: 'text-amber-500', activeTextColor: 'text-amber-600' },
+          ].map((subtab) => {
+            const isActive = activeSubTab === subtab.id;
+            const IconComp = subtab.icon;
+
+            return (
+              <motion.button
+                key={subtab.id}
+                onClick={() => setActiveSubTab(subtab.id as any)}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.96 }}
+                className={`relative flex items-center space-x-1.5 px-3.5 py-2 rounded-xl transition-colors cursor-pointer select-none ${
+                  isActive
+                    ? subtab.activeTextColor || 'text-blue-600 font-black'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                {isActive && (
+                  <motion.div
+                    layoutId="adminSubtabBackground"
+                    className="absolute inset-0 bg-white rounded-xl shadow-xs"
+                    transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+                  />
+                )}
+
+                <motion.span
+                  animate={{
+                    scale: isActive ? 1.22 : 1,
+                    y: isActive ? -1 : 0,
+                  }}
+                  transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+                  className="relative z-10 inline-flex items-center justify-center shrink-0"
+                >
+                  <IconComp className={`w-4 h-4 ${subtab.iconColor && !isActive ? subtab.iconColor : ''}`} />
+                </motion.span>
+
+                <span className="relative z-10">{subtab.label}</span>
+
+                {subtab.badge !== null && subtab.badge !== undefined && (
+                  <span className={`relative z-10 px-1.5 py-0.5 text-[9px] rounded-full font-black animate-pulse ${subtab.badgeColor}`}>
+                    {subtab.badge}
+                  </span>
+                )}
+              </motion.button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Quick Admin Action Toolbar */}
+      <div className="px-6 py-3.5 bg-slate-900 text-white flex flex-wrap items-center justify-between gap-3 border-b border-slate-800">
+        <div className="flex items-center space-x-2 text-xs font-bold text-slate-300">
+          <Zap className="w-4 h-4 text-amber-400 animate-bounce" />
+          <span className="uppercase tracking-wider text-amber-400 font-black">Công cụ Quản trị Nhanh:</span>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
           <button
-            onClick={() => setActiveSubTab('moderation')}
-            className={`flex items-center space-x-1.5 px-3.5 py-2 rounded-xl transition-all ${
-              activeSubTab === 'moderation' ? 'bg-white text-blue-600 shadow-sm font-black' : 'text-slate-600 hover:text-slate-900'
-            }`}
+            onClick={() => {
+              setEditingDesign(null);
+              setIsDesignEditorOpen(true);
+            }}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-black rounded-xl shadow-md shadow-blue-500/20 transition-all flex items-center space-x-1.5 active:scale-95 cursor-pointer ring-2 ring-blue-400/30"
+            title="Thêm trực tiếp mẫu thiết kế Slide / UI / Đồ án mới"
           >
-            <CheckCircle className="w-4 h-4" />
-            <span>Kiểm duyệt bài</span>
-            {totalPending > 0 && (
-              <span className="px-1.5 py-0.5 bg-rose-500 text-white text-[9px] rounded-full font-black animate-pulse">
-                {totalPending}
-              </span>
-            )}
+            <Plus className="w-4 h-4" />
+            <span>Thêm file thiết kế</span>
           </button>
 
           <button
-            onClick={() => setActiveSubTab('reports')}
-            className={`flex items-center space-x-1.5 px-3.5 py-2 rounded-xl transition-all ${
-              activeSubTab === 'reports' ? 'bg-white text-rose-600 shadow-sm font-black' : 'text-slate-600 hover:text-slate-900'
-            }`}
+            onClick={() => {
+              setEditingArticle(null);
+              setIsArticleEditorOpen(true);
+            }}
+            className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black rounded-xl shadow-sm transition-all flex items-center space-x-1.5 active:scale-95"
+            title="Soạn thảo và đăng bài viết tri thức mới"
           >
-            <Flag className="w-4 h-4 text-rose-600" />
-            <span>Báo cáo vi phạm</span>
-            {reportsList.filter(r => r.status?.toLowerCase() === 'pending').length > 0 && (
-              <span className="px-1.5 py-0.5 bg-rose-600 text-white text-[9px] rounded-full font-black animate-pulse">
-                {reportsList.filter(r => r.status?.toLowerCase() === 'pending').length}
-              </span>
-            )}
+            <Plus className="w-4 h-4" />
+            <span>Đăng bài viết mới</span>
           </button>
 
           <button
-            onClick={() => setActiveSubTab('articles')}
-            className={`flex items-center space-x-1.5 px-3.5 py-2 rounded-xl transition-all ${
-              activeSubTab === 'articles' ? 'bg-white text-blue-600 shadow-sm font-black' : 'text-slate-600 hover:text-slate-900'
-            }`}
+            onClick={() => {
+              setEditingPrompt(null);
+              setIsPromptEditorOpen(true);
+            }}
+            className="px-3.5 py-2 bg-purple-600 hover:bg-purple-500 text-white text-xs font-black rounded-xl shadow-sm transition-all flex items-center space-x-1.5 active:scale-95"
+            title="Đóng góp câu lệnh AI Prompt cao cấp mới"
           >
-            <BookOpen className="w-4 h-4" />
-            <span>Bài viết ({articlesList.length})</span>
+            <Plus className="w-4 h-4" />
+            <span>Thêm AI Prompt</span>
           </button>
 
           <button
-            onClick={() => setActiveSubTab('fonts')}
-            className={`flex items-center space-x-1.5 px-3.5 py-2 rounded-xl transition-all ${
-              activeSubTab === 'fonts' ? 'bg-white text-blue-600 shadow-sm font-black' : 'text-slate-600 hover:text-slate-900'
-            }`}
+            onClick={() => {
+              setEditingFont(null);
+              setIsFontUploadModalOpen(true);
+            }}
+            className="px-3.5 py-2 bg-amber-600 hover:bg-amber-500 text-white text-xs font-black rounded-xl shadow-sm transition-all flex items-center space-x-1.5 active:scale-95"
+            title="Tải lên bộ Font chữ Việt hóa mới"
           >
-            <Type className="w-4 h-4" />
-            <span>Quản lý Font ({fontsList.length})</span>
+            <Plus className="w-4 h-4" />
+            <span>Thêm Font chữ</span>
           </button>
 
           <button
-            onClick={() => setActiveSubTab('users')}
-            className={`flex items-center space-x-1.5 px-3.5 py-2 rounded-xl transition-all ${
-              activeSubTab === 'users' ? 'bg-white text-blue-600 shadow-sm font-black' : 'text-slate-600 hover:text-slate-900'
-            }`}
+            onClick={() => setIsLeaderboardOpen(true)}
+            className="px-3.5 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 text-xs font-black rounded-xl shadow-md transition-all flex items-center space-x-1.5 active:scale-95 cursor-pointer"
+            title="Xem bảng xếp hạng tác giả & huy hiệu đóng góp"
           >
-            <Users className="w-4 h-4" />
-            <span>Thành viên ({userList.length})</span>
+            <Award className="w-4 h-4 text-slate-950" />
+            <span>Bảng Xếp Hạng & Huy Hiệu</span>
           </button>
 
           <button
-            onClick={() => setActiveSubTab('security')}
-            className={`flex items-center space-x-1.5 px-3.5 py-2 rounded-xl transition-all ${
-              activeSubTab === 'security' ? 'bg-white text-blue-600 shadow-sm font-black' : 'text-slate-600 hover:text-slate-900'
-            }`}
+            onClick={() => {
+              exportDesignsToCSV(designFiles);
+              toastSuccess('Đã xuất dữ liệu thiết kế ra tệp CSV thành công!', 'Xuất dữ liệu');
+            }}
+            className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold rounded-xl transition-all flex items-center space-x-1.5 cursor-pointer"
+            title="Xuất báo cáo danh sách tài nguyên ra file Excel / CSV"
           >
-            <ShieldCheck className="w-4 h-4 text-emerald-600" />
-            <span>Bảo mật & Phòng vệ</span>
+            <Download className="w-4 h-4 text-sky-400" />
+            <span>Xuất CSV Báo cáo</span>
           </button>
 
           <button
-            onClick={() => setActiveSubTab('settings')}
-            className={`flex items-center space-x-1.5 px-3.5 py-2 rounded-xl transition-all ${
-              activeSubTab === 'settings' ? 'bg-white text-blue-600 shadow-sm font-black' : 'text-slate-600 hover:text-slate-900'
+            onClick={() => setActiveSubTab('ideas')}
+            className={`px-3.5 py-2 text-xs font-black rounded-xl transition-all flex items-center space-x-1.5 active:scale-95 ${
+              activeSubTab === 'ideas'
+                ? 'bg-amber-500 text-slate-950 font-black'
+                : 'bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700'
             }`}
           >
-            <Settings className="w-4 h-4" />
-            <span>Cấu hình chung</span>
-          </button>
-
-          <button
-            onClick={() => setActiveSubTab('uploadResearch')}
-            className={`flex items-center space-x-1.5 px-3.5 py-2 rounded-xl transition-all ${
-              activeSubTab === 'uploadResearch' ? 'bg-white text-blue-600 shadow-sm font-black' : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <HardDrive className="w-4 h-4" />
-            <span>Drive Research</span>
+            <Lightbulb className="w-4 h-4" />
+            <span>Sáng kiến Ý tưởng</span>
           </button>
         </div>
       </div>
@@ -590,33 +675,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   Đạo đức AI & Biểu trưng Quốc gia
                 </button>
               </div>
-            </div>
-
-            {/* Admin Add Buttons Row */}
-            <div className="flex flex-wrap items-center gap-3 bg-white p-4 rounded-2xl border border-slate-200">
-              <div className="text-xs font-bold text-slate-700 uppercase tracking-wider mr-2">Công cụ quản trị nhanh:</div>
-              <button
-                type="button"
-                onClick={() => {
-                  setEditingDesign(null);
-                  setIsDesignEditorOpen(true);
-                }}
-                className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs font-black rounded-xl shadow-md shadow-blue-500/20 transition-all flex items-center space-x-2"
-              >
-                <Plus className="w-4 h-4 stroke-[3]" />
-                <span>Thêm Slide Thiết Kế Mới</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setEditingPrompt(null);
-                  setIsPromptEditorOpen(true);
-                }}
-                className="px-4 py-2.5 bg-purple-600 hover:bg-purple-700 active:scale-95 text-white text-xs font-black rounded-xl shadow-md shadow-purple-500/20 transition-all flex items-center space-x-2"
-              >
-                <Plus className="w-4 h-4 stroke-[3]" />
-                <span>Thêm AI Prompt Mới</span>
-              </button>
             </div>
 
             {/* Filter & Batch Actions Bar */}
@@ -1641,6 +1699,119 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         {activeSubTab === 'uploadResearch' && (
           <DriveUploadResearch />
         )}
+
+        {/* ========================================================================= */}
+        {/* TAB 6: IDEAS & INNOVATION MANAGEMENT (NÂNG CẤP Ý TƯỞNG) */}
+        {/* ========================================================================= */}
+        {activeSubTab === 'ideas' && (
+          <div className="space-y-6 animate-fade-in">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 rounded-2xl text-white shadow-md">
+              <div className="flex items-center space-x-3.5">
+                <div className="p-3 bg-white/20 backdrop-blur-md rounded-2xl">
+                  <Lightbulb className="w-6 h-6 text-amber-100" />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-black tracking-tight">Trung Tâm Nâng Cấp & Quản Lý Ý Tưởng</h3>
+                  <p className="text-xs text-amber-100">Duyệt sáng kiến cộng đồng, phê duyệt nâng cấp thành dự án thiết kế và tài nguyên chính thức</p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => {
+                  setEditingDesign(null);
+                  setIsDesignEditorOpen(true);
+                }}
+                className="px-4 py-2.5 bg-white text-amber-900 hover:bg-amber-50 font-black text-xs rounded-xl shadow-sm transition-all shrink-0 flex items-center space-x-1.5"
+              >
+                <Plus className="w-4 h-4 text-amber-600" />
+                <span>Thêm File Thiết Kế Mới</span>
+              </button>
+            </div>
+
+            {/* Ideas List Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {communityIdeas.map((idea) => (
+                <div
+                  key={idea.id}
+                  className="bg-slate-50 border border-slate-200/80 rounded-2xl p-5 hover:border-amber-400 transition-all flex flex-col justify-between space-y-4"
+                >
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="px-2.5 py-0.5 bg-amber-100 text-amber-900 text-[10px] font-black uppercase rounded-lg">
+                        {idea.category}
+                      </span>
+
+                      <span className={`px-2.5 py-0.5 text-[10px] font-black rounded-lg ${
+                        idea.status === 'Đã nâng cấp'
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : idea.status === 'Đang phát triển'
+                          ? 'bg-blue-100 text-blue-800'
+                          : 'bg-slate-200 text-slate-700'
+                      }`}>
+                        {idea.status}
+                      </span>
+                    </div>
+
+                    <h4 className="text-sm font-bold text-slate-900">{idea.title}</h4>
+                    <p className="text-xs text-slate-600 leading-relaxed">{idea.description}</p>
+
+                    <div className="pt-2 text-[11px] text-slate-400 font-medium flex items-center justify-between">
+                      <span>Đóng góp bởi: <strong className="text-slate-700">{idea.author}</strong></span>
+                      <span className="flex items-center space-x-1 text-rose-500 font-bold">
+                        <Heart className="w-3.5 h-3.5 fill-rose-500" />
+                        <span>{idea.votesCount} lượt chọn</span>
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="pt-3 border-t border-slate-200/60 flex items-center justify-between gap-2">
+                    {idea.status !== 'Đã nâng cấp' ? (
+                      <button
+                        onClick={() => {
+                          const updated = communityIdeas.map(i => i.id === idea.id ? { 
+                            ...i, 
+                            status: 'Đã nâng cấp' as const,
+                            adminNotes: 'Ý tưởng đã được Ban Quản Trị phê duyệt nâng cấp thành file thiết kế chính thức.' 
+                          } : i);
+                          setCommunityIdeas(updated);
+                          localStorage.setItem('ictc_community_ideas', JSON.stringify(updated));
+                          
+                          setEditingDesign({
+                            id: `des-${Date.now()}`,
+                            title: idea.title,
+                            description: idea.description,
+                            category: idea.category === 'Mẫu Slide & Thiết kế' ? 'PowerPoint Templates' : 'Infographics & Posters',
+                            fileType: 'PPTX',
+                            fileSize: '15.0 MB',
+                            driveUrl: localConfig.driveDesignFolder || '',
+                            previewUrl: 'https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=800&q=80',
+                            tags: idea.tags || ['Nâng cấp', 'Slide'],
+                            downloadsCount: 0,
+                            rating: 5.0,
+                            createdAt: new Date().toISOString().split('T')[0],
+                            author: `${currentUser.displayName} (Admin)`,
+                            status: 'Approved'
+                          });
+                          setIsDesignEditorOpen(true);
+                          toastSuccess(`Đã phê duyệt và khởi tạo dự án thiết kế từ ý tưởng "${idea.title}"!`);
+                        }}
+                        className="w-full py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-black text-xs rounded-xl shadow-xs transition-all flex items-center justify-center space-x-1.5"
+                      >
+                        <Zap className="w-4 h-4 fill-white" />
+                        <span>Nâng cấp thành File Thiết Kế</span>
+                      </button>
+                    ) : (
+                      <div className="w-full py-2 bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold text-xs rounded-xl text-center flex items-center justify-center space-x-1">
+                        <CheckCircle className="w-4 h-4 text-emerald-600" />
+                        <span>Đã nâng cấp thành công</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ========================================================================= */}
@@ -1884,6 +2055,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         editingPrompt={editingPrompt}
         currentUser={currentUser}
         onSave={handleSavePromptSuccess}
+      />
+
+      {/* Leaderboard Modal */}
+      <LeaderboardModal
+        users={userList}
+        designFiles={designFiles}
+        aiPrompts={promptFiles}
+        articles={articlesList}
+        isOpen={isLeaderboardOpen}
+        onClose={() => setIsLeaderboardOpen(false)}
       />
     </div>
   );

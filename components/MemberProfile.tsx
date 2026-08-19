@@ -1,31 +1,157 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   User as UserIcon, Shield, Star, Award, Sparkles, Folder, CheckCircle, 
   Clock, Heart, Download, Edit2, Trash2, Calendar, Trophy, Zap, 
-  Camera, Upload, Save, Check, X, RefreshCw, Phone, Mail, Building, FileText, Image as ImageIcon
+  Camera, Upload, Save, Check, X, RefreshCw, Phone, Mail, Building, FileText, Image as ImageIcon,
+  Bookmark, BookmarkCheck, ExternalLink, Copy, BookOpen, Layers
 } from 'lucide-react';
-import { User, DesignFile, AIPrompt } from '../types';
+import { User, DesignFile, AIPrompt, Article } from '../types';
 import { UserAvatar, compressAndResizeImage } from './UserAvatar';
-import { saveUserToDb } from '../lib/db';
+import { saveUserToDb, deleteDesignFromDb, deletePromptFromDb, deleteArticleFromDb } from '../lib/db';
 import { useToast } from '../context/ToastContext';
+import { ArticleReaderModal } from './ArticleReaderModal';
 
 interface MemberProfileProps {
   currentUser: User;
   onUpdateUser?: (updatedUser: User) => void;
+  designFiles?: DesignFile[];
+  aiPrompts?: AIPrompt[];
+  articles?: Article[];
+  onDesignUpdate?: (updatedFiles: DesignFile[]) => void;
+  onPromptUpdate?: (updatedPrompts: AIPrompt[]) => void;
+  onArticleUpdate?: (updatedArticles: Article[]) => void;
   onEditDesign?: (file: DesignFile) => void;
   onEditPrompt?: (prompt: AIPrompt) => void;
+  onEditArticle?: (article: Article) => void;
 }
 
 export const MemberProfile: React.FC<MemberProfileProps> = ({ 
   currentUser,
   onUpdateUser,
+  designFiles,
+  aiPrompts,
+  articles,
+  onDesignUpdate,
+  onPromptUpdate,
+  onArticleUpdate,
   onEditDesign,
-  onEditPrompt
+  onEditPrompt,
+  onEditArticle
 }) => {
   const { success: toastSuccess, error: toastError, info: toastInfo } = useToast();
   const [userFiles, setUserFiles] = useState<DesignFile[]>([]);
   const [userPrompts, setUserPrompts] = useState<AIPrompt[]>([]);
+  const [userArticles, setUserArticles] = useState<Article[]>([]);
   const [contributionPoints, setContributionPoints] = useState(0);
+
+  // Favorites state
+  const [favoriteItems, setFavoriteItems] = useState<any[]>([]);
+  const [activeFavCategory, setActiveFavCategory] = useState<'all' | 'design' | 'prompt' | 'article'>('all');
+  const [readingArticle, setReadingArticle] = useState<Article | null>(null);
+
+  const loadFavorites = () => {
+    const saved = localStorage.getItem('ictc_bookmarks');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        setFavoriteItems(Array.isArray(parsed) ? parsed : []);
+      } catch (e) {
+        setFavoriteItems([]);
+      }
+    } else {
+      setFavoriteItems([]);
+    }
+  };
+
+  useEffect(() => {
+    loadFavorites();
+
+    const handleStorageChange = () => {
+      loadFavorites();
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, []);
+
+  const favoritedDesigns = useMemo(() => favoriteItems.filter(b => b.type === 'design' || b.targetType === 'design'), [favoriteItems]);
+  const favoritedPrompts = useMemo(() => favoriteItems.filter(b => b.type === 'prompt' || b.targetType === 'prompt'), [favoriteItems]);
+  const favoritedArticles = useMemo(() => favoriteItems.filter(b => b.type === 'article' || b.targetType === 'article'), [favoriteItems]);
+
+  const filteredFavorites = useMemo(() => {
+    if (activeFavCategory === 'design') return favoritedDesigns;
+    if (activeFavCategory === 'prompt') return favoritedPrompts;
+    if (activeFavCategory === 'article') return favoritedArticles;
+    return favoriteItems;
+  }, [activeFavCategory, favoriteItems, favoritedDesigns, favoritedPrompts, favoritedArticles]);
+
+  const handleRemoveFavorite = (targetId: string, itemTitle: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const saved = localStorage.getItem('ictc_bookmarks');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved) as any[];
+        const updated = parsed.filter(b => b.targetId !== targetId && b.id !== targetId);
+        localStorage.setItem('ictc_bookmarks', JSON.stringify(updated));
+        setFavoriteItems(updated);
+        window.dispatchEvent(new Event('storage'));
+        toastInfo(`Đã bỏ "${itemTitle}" khỏi danh sách Yêu thích.`, 'Bỏ lưu thành công');
+      } catch (e) {}
+    }
+  };
+
+  const handleCopyPromptText = (text: string, title: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    toastSuccess(`Đã sao chép câu lệnh "${title}" vào khay nhớ tạm!`, 'Sao chép Prompt');
+  };
+
+  const handleOpenFavoriteItem = (item: any) => {
+    const itemType = item.type || item.targetType;
+    if (itemType === 'article') {
+      const matched = (articles || []).find(a => a.id === item.targetId || a.id === item.id);
+      if (matched) {
+        setReadingArticle(matched);
+      } else {
+        setReadingArticle({
+          id: item.targetId || item.id,
+          title: item.title,
+          slug: item.title?.toLowerCase().replace(/\s+/g, '-'),
+          excerpt: item.description || item.title,
+          content: `<p>${item.description || item.title}</p>`,
+          coverImage: item.previewUrl || 'https://images.unsplash.com/photo-1542744094-3a31f103e35f?auto=format&fit=crop&w=800&q=80',
+          category: item.category || 'Chia sẻ',
+          author: item.author || 'Thành viên ICTC',
+          publishedAt: item.savedAt || new Date().toISOString().split('T')[0],
+          viewsCount: 1,
+          likesCount: 1,
+          readingTimeMinutes: 3,
+          isFeatured: false,
+          status: 'Published'
+        });
+      }
+    } else if (itemType === 'design') {
+      if (item.driveUrl && item.driveUrl.startsWith('http')) {
+        window.open(item.driveUrl, '_blank', 'noopener,noreferrer');
+      } else if (item.attachedFileData) {
+        const link = document.createElement('a');
+        link.href = item.attachedFileData;
+        link.download = item.attachedFileName || `${item.title}.zip`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      } else {
+        toastInfo(`File mẫu thiết kế "${item.title}" đã lưu trong bộ sưu tập của bạn.`, 'Mẫu thiết kế');
+      }
+    } else if (itemType === 'prompt') {
+      if (item.promptText) {
+        handleCopyPromptText(item.promptText, item.title);
+      }
+    }
+  };
   
   // Profile edit state
   const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -47,25 +173,54 @@ export const MemberProfile: React.FC<MemberProfileProps> = ({
 
   useEffect(() => {
     // 1. Get user contributed designs
-    const savedDesigns = localStorage.getItem('ictc_design_files');
-    if (savedDesigns) {
-      try {
-        const parsed = JSON.parse(savedDesigns) as DesignFile[];
-        const filtered = parsed.filter(f => f.authorId === currentUser.id || f.author?.includes(currentUser.displayName));
-        setUserFiles(filtered);
-      } catch (e) {}
-    }
+    const sourceFiles = designFiles && designFiles.length > 0 ? designFiles : (() => {
+      const saved = localStorage.getItem('ictc_design_files');
+      if (saved) {
+        try { return JSON.parse(saved) as DesignFile[]; } catch (e) {}
+      }
+      return [];
+    })();
+
+    const filteredFiles = sourceFiles.filter(f => 
+      f.authorId === currentUser.id || 
+      (f.author && f.author.toLowerCase().includes(currentUser.displayName.toLowerCase())) ||
+      (currentUser.role === 'Admin')
+    );
+    setUserFiles(filteredFiles);
 
     // 2. Get user contributed prompts
-    const savedPrompts = localStorage.getItem('ictc_ai_prompts');
-    if (savedPrompts) {
-      try {
-        const parsed = JSON.parse(savedPrompts) as AIPrompt[];
-        const filtered = parsed.filter(p => p.authorId === currentUser.id || p.author?.includes(currentUser.displayName));
-        setUserPrompts(filtered);
-      } catch (e) {}
-    }
-  }, [currentUser.id, currentUser.displayName]);
+    const sourcePrompts = aiPrompts && aiPrompts.length > 0 ? aiPrompts : (() => {
+      const saved = localStorage.getItem('ictc_ai_prompts');
+      if (saved) {
+        try { return JSON.parse(saved) as AIPrompt[]; } catch (e) {}
+      }
+      return [];
+    })();
+
+    const filteredPrompts = sourcePrompts.filter(p => 
+      p.authorId === currentUser.id || 
+      (p.author && p.author.toLowerCase().includes(currentUser.displayName.toLowerCase())) ||
+      (currentUser.role === 'Admin')
+    );
+    setUserPrompts(filteredPrompts);
+
+    // 3. Get user contributed articles
+    const sourceArticles = articles && articles.length > 0 ? articles : (() => {
+      const saved = localStorage.getItem('ictc_articles');
+      if (saved) {
+        try { return JSON.parse(saved) as Article[]; } catch (e) {}
+      }
+      return [];
+    })();
+
+    const filteredArticles = sourceArticles.filter(a => 
+      a.authorId === currentUser.id || 
+      (a.author && a.author.toLowerCase().includes(currentUser.displayName.toLowerCase())) ||
+      (currentUser.role === 'Admin')
+    );
+    setUserArticles(filteredArticles);
+
+  }, [currentUser, designFiles, aiPrompts, articles]);
 
   // Calculate dynamic gamification points
   useEffect(() => {
@@ -196,35 +351,69 @@ export const MemberProfile: React.FC<MemberProfileProps> = ({
     }
   };
 
-  const handleDeleteFile = (fileId: string) => {
-    if (window.confirm('Bạn có chắc chắn muốn xóa bài đóng góp thiết kế này?')) {
-      const savedDesigns = localStorage.getItem('ictc_design_files');
-      if (savedDesigns) {
-        try {
-          const parsed = JSON.parse(savedDesigns) as DesignFile[];
-          const updated = parsed.filter(f => f.id !== fileId);
-          localStorage.setItem('ictc_design_files', JSON.stringify(updated));
-          setUserFiles(userFiles.filter(f => f.id !== fileId));
-          window.dispatchEvent(new Event('storage'));
-          toastInfo('Đã xóa bài đóng góp thiết kế.', 'Đã xóa');
-        } catch (e) {}
+  const handleDeleteFile = async (fileId: string) => {
+    if (window.confirm('Bạn có chắc chắn muốn xóa tệp / bài đóng góp thiết kế này? Hành động này không thể hoàn tác.')) {
+      try {
+        await deleteDesignFromDb(fileId);
+      } catch (e) {
+        console.warn('Xóa từ Firestore có cảnh báo, tiếp tục xóa bộ nhớ cục bộ:', e);
       }
+
+      const source = designFiles || userFiles;
+      const updated = source.filter(f => f.id !== fileId);
+      setUserFiles(prev => prev.filter(f => f.id !== fileId));
+      localStorage.setItem('ictc_design_files', JSON.stringify(updated));
+
+      if (onDesignUpdate) {
+        onDesignUpdate(updated);
+      }
+
+      window.dispatchEvent(new Event('storage'));
+      toastInfo('Đã xóa bài đóng góp thiết kế thành công.', 'Đã xóa');
     }
   };
 
-  const handleDeletePrompt = (promptId: string) => {
-    if (window.confirm('Bạn có chắc chắn muốn xóa bài đóng góp câu lệnh AI này?')) {
-      const savedPrompts = localStorage.getItem('ictc_ai_prompts');
-      if (savedPrompts) {
-        try {
-          const parsed = JSON.parse(savedPrompts) as AIPrompt[];
-          const updated = parsed.filter(p => p.id !== promptId);
-          localStorage.setItem('ictc_ai_prompts', JSON.stringify(updated));
-          setUserPrompts(userPrompts.filter(p => p.id !== promptId));
-          window.dispatchEvent(new Event('storage'));
-          toastInfo('Đã xóa bài đóng góp câu lệnh AI.', 'Đã xóa');
-        } catch (e) {}
+  const handleDeletePrompt = async (promptId: string) => {
+    if (window.confirm('Bạn có chắc chắn muốn xóa bài đóng góp câu lệnh AI này? Hành động này không thể hoàn tác.')) {
+      try {
+        await deletePromptFromDb(promptId);
+      } catch (e) {
+        console.warn('Xóa từ Firestore có cảnh báo, tiếp tục xóa bộ nhớ cục bộ:', e);
       }
+
+      const source = aiPrompts || userPrompts;
+      const updated = source.filter(p => p.id !== promptId);
+      setUserPrompts(prev => prev.filter(p => p.id !== promptId));
+      localStorage.setItem('ictc_ai_prompts', JSON.stringify(updated));
+
+      if (onPromptUpdate) {
+        onPromptUpdate(updated);
+      }
+
+      window.dispatchEvent(new Event('storage'));
+      toastInfo('Đã xóa câu lệnh AI thành công.', 'Đã xóa');
+    }
+  };
+
+  const handleDeleteArticle = async (articleId: string) => {
+    if (window.confirm('Bạn có chắc chắn muốn xóa bài viết này? Hành động này không thể hoàn tác.')) {
+      try {
+        await deleteArticleFromDb(articleId);
+      } catch (e) {
+        console.warn('Xóa từ Firestore có cảnh báo, tiếp tục xóa bộ nhớ cục bộ:', e);
+      }
+
+      const source = articles || userArticles;
+      const updated = source.filter(a => a.id !== articleId);
+      setUserArticles(prev => prev.filter(a => a.id !== articleId));
+      localStorage.setItem('ictc_articles', JSON.stringify(updated));
+
+      if (onArticleUpdate) {
+        onArticleUpdate(updated);
+      }
+
+      window.dispatchEvent(new Event('storage'));
+      toastInfo('Đã xóa bài viết thành công.', 'Đã xóa');
     }
   };
 
@@ -528,6 +717,179 @@ export const MemberProfile: React.FC<MemberProfileProps> = ({
         </div>
       </div>
 
+      {/* Favorites / Bookmarks Section */}
+      <div className="bg-white border border-slate-200/80 rounded-3xl p-6 sm:p-8 shadow-sm space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-5">
+          <div>
+            <h3 className="text-base font-bold text-slate-900 flex items-center space-x-2">
+              <Heart className="w-5 h-5 text-rose-500 fill-rose-500" />
+              <span>Mục Yêu thích & Bộ sưu tập đã lưu ({favoriteItems.length})</span>
+            </h3>
+            <p className="text-xs text-slate-400 mt-1">Danh sách các bài viết, mẫu thiết kế slide/đồ án và câu lệnh AI bạn đã đánh dấu lưu trữ.</p>
+          </div>
+
+          {/* Sub-category tabs */}
+          <div className="flex flex-wrap items-center gap-1.5 bg-slate-100 p-1 rounded-2xl self-start sm:self-auto">
+            <button
+              onClick={() => setActiveFavCategory('all')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                activeFavCategory === 'all'
+                  ? 'bg-white text-slate-900 shadow-xs'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              Tất cả ({favoriteItems.length})
+            </button>
+            <button
+              onClick={() => setActiveFavCategory('design')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                activeFavCategory === 'design'
+                  ? 'bg-white text-blue-600 shadow-xs'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              Thiết kế ({favoritedDesigns.length})
+            </button>
+            <button
+              onClick={() => setActiveFavCategory('prompt')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                activeFavCategory === 'prompt'
+                  ? 'bg-white text-violet-600 shadow-xs'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              AI Prompt ({favoritedPrompts.length})
+            </button>
+            <button
+              onClick={() => setActiveFavCategory('article')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                activeFavCategory === 'article'
+                  ? 'bg-white text-emerald-600 shadow-xs'
+                  : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              Bài viết ({favoritedArticles.length})
+            </button>
+          </div>
+        </div>
+
+        {filteredFavorites.length === 0 ? (
+          <div className="text-center py-12 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200 space-y-3">
+            <Bookmark className="w-10 h-10 mx-auto text-slate-300 stroke-1" />
+            <p className="text-sm font-bold text-slate-600">Chưa có mục yêu thích nào trong danh mục này</p>
+            <p className="text-xs text-slate-400 max-w-sm mx-auto leading-relaxed">
+              Hãy nhấn vào biểu tượng <Heart className="w-3.5 h-3.5 inline text-rose-500 fill-rose-500" /> hoặc biểu tượng Lưu trên các bài viết, mẫu slide hoặc AI prompt để xem lại nhanh tại đây.
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredFavorites.map((item, index) => {
+              const itemType = item.type || item.targetType;
+              const isDesign = itemType === 'design';
+              const isPrompt = itemType === 'prompt';
+              const isArticle = itemType === 'article';
+
+              return (
+                <div
+                  key={item.id || item.targetId || index}
+                  className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-2xs hover:shadow-md transition-all flex flex-col justify-between group space-y-3"
+                >
+                  <div className="space-y-2.5">
+                    {/* Header Image & Badge */}
+                    <div className="relative aspect-[16/9] bg-slate-100 rounded-xl overflow-hidden border border-slate-100">
+                      <img
+                        src={item.previewUrl || 'https://images.unsplash.com/photo-1542744094-3a31f103e35f?auto=format&fit=crop&w=800&q=80'}
+                        alt={item.title}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        referrerPolicy="no-referrer"
+                      />
+                      <div className="absolute top-2 left-2">
+                        {isDesign && (
+                          <span className="px-2.5 py-1 rounded-lg bg-blue-600/90 backdrop-blur-md text-white text-[10px] font-extrabold flex items-center space-x-1 shadow-xs">
+                            <ImageIcon className="w-3 h-3" />
+                            <span>Mẫu Thiết kế</span>
+                          </span>
+                        )}
+                        {isPrompt && (
+                          <span className="px-2.5 py-1 rounded-lg bg-violet-600/90 backdrop-blur-md text-white text-[10px] font-extrabold flex items-center space-x-1 shadow-xs">
+                            <Sparkles className="w-3 h-3" />
+                            <span>AI Prompt</span>
+                          </span>
+                        )}
+                        {isArticle && (
+                          <span className="px-2.5 py-1 rounded-lg bg-emerald-600/90 backdrop-blur-md text-white text-[10px] font-extrabold flex items-center space-x-1 shadow-xs">
+                            <FileText className="w-3 h-3" />
+                            <span>Bài viết</span>
+                          </span>
+                        )}
+                      </div>
+
+                      <button
+                        onClick={(e) => handleRemoveFavorite(item.targetId || item.id, item.title, e)}
+                        className="absolute top-2 right-2 p-1.5 bg-white/90 hover:bg-rose-50 text-rose-500 rounded-lg backdrop-blur-md shadow-xs transition-colors"
+                        title="Bỏ lưu khỏi Yêu thích"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+
+                    <div>
+                      <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">
+                        {item.category || (isDesign ? 'Slide/Tài liệu' : isPrompt ? 'AI Prompt' : 'Chia sẻ')}
+                      </span>
+                      <h4 className="text-sm font-bold text-slate-900 line-clamp-2 mt-0.5 leading-snug group-hover:text-blue-600 transition-colors">
+                        {item.title}
+                      </h4>
+                      {item.promptText && (
+                        <p className="text-xs text-slate-500 line-clamp-2 mt-1 font-mono bg-slate-50 p-2 rounded-lg border border-slate-100">
+                          {item.promptText}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
+                    <span className="text-slate-400 text-[11px] font-medium">
+                      {item.savedAt ? `Lưu ${item.savedAt}` : item.author ? item.author : 'Thành viên ICTC'}
+                    </span>
+
+                    <button
+                      onClick={() => handleOpenFavoriteItem(item)}
+                      className={`px-3 py-1.5 rounded-xl font-bold text-xs flex items-center space-x-1 transition-all ${
+                        isDesign
+                          ? 'bg-blue-50 hover:bg-blue-100 text-blue-700'
+                          : isPrompt
+                          ? 'bg-violet-50 hover:bg-violet-100 text-violet-700'
+                          : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700'
+                      }`}
+                    >
+                      {isDesign && (
+                        <>
+                          <Download className="w-3.5 h-3.5" />
+                          <span>Mở / Tải về</span>
+                        </>
+                      )}
+                      {isPrompt && (
+                        <>
+                          <Copy className="w-3.5 h-3.5" />
+                          <span>Sao chép</span>
+                        </>
+                      )}
+                      {isArticle && (
+                        <>
+                          <BookOpen className="w-3.5 h-3.5" />
+                          <span>Đọc bài</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
       {/* Contribution lists layout */}
       <div className="bg-white border border-slate-200/80 rounded-3xl p-6 sm:p-8 shadow-sm space-y-6">
         <div className="border-b border-slate-100 pb-4">
@@ -535,7 +897,7 @@ export const MemberProfile: React.FC<MemberProfileProps> = ({
           <p className="text-xs text-slate-400 mt-1">Các tài liệu, thiết kế đồ án, slide và câu lệnh AI cao cấp do bạn đóng góp sẽ được lưu trữ và kiểm duyệt tại đây.</p>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           
           {/* List 1: Slide & Design Files */}
           <div className="space-y-4">
@@ -553,7 +915,7 @@ export const MemberProfile: React.FC<MemberProfileProps> = ({
             ) : (
               <div className="space-y-2.5">
                 {userFiles.map(file => (
-                  <div key={file.id} className="p-3.5 bg-slate-50 border border-slate-150 rounded-xl flex items-center justify-between gap-4">
+                  <div key={file.id} className="p-3.5 bg-slate-50 border border-slate-150 rounded-xl flex items-center justify-between gap-3">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center space-x-2">
                         <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase ${
@@ -567,6 +929,15 @@ export const MemberProfile: React.FC<MemberProfileProps> = ({
                       <p className="text-[9px] text-slate-400 font-medium">Đăng vào: {file.createdAt}</p>
                     </div>
                     <div className="flex items-center space-x-1 shrink-0">
+                      {onEditDesign && (
+                        <button
+                          onClick={() => onEditDesign(file)}
+                          className="p-1.5 bg-white hover:bg-blue-50 text-slate-400 hover:text-blue-600 rounded-lg border border-slate-200 transition-colors"
+                          title="Sửa bài đăng"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                       <button
                         onClick={() => handleDeleteFile(file.id)}
                         className="p-1.5 bg-white hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-lg border border-slate-200 transition-colors"
@@ -586,7 +957,7 @@ export const MemberProfile: React.FC<MemberProfileProps> = ({
             <div className="flex items-center justify-between pb-2 border-b border-slate-100">
               <span className="text-xs font-extrabold text-slate-500 uppercase tracking-widest flex items-center">
                 <Sparkles className="w-4 h-4 mr-1.5 text-purple-500" />
-                Câu lệnh AI Prompts ({userPrompts.length})
+                Câu lệnh AI ({userPrompts.length})
               </span>
             </div>
 
@@ -597,7 +968,7 @@ export const MemberProfile: React.FC<MemberProfileProps> = ({
             ) : (
               <div className="space-y-2.5">
                 {userPrompts.map(prompt => (
-                  <div key={prompt.id} className="p-3.5 bg-slate-50 border border-slate-150 rounded-xl flex items-center justify-between gap-4">
+                  <div key={prompt.id} className="p-3.5 bg-slate-50 border border-slate-150 rounded-xl flex items-center justify-between gap-3">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center space-x-2">
                         <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase ${
@@ -611,6 +982,15 @@ export const MemberProfile: React.FC<MemberProfileProps> = ({
                       <p className="text-[9px] text-slate-400 font-medium">Đăng vào: {prompt.createdAt}</p>
                     </div>
                     <div className="flex items-center space-x-1 shrink-0">
+                      {onEditPrompt && (
+                        <button
+                          onClick={() => onEditPrompt(prompt)}
+                          className="p-1.5 bg-white hover:bg-purple-50 text-slate-400 hover:text-purple-600 rounded-lg border border-slate-200 transition-colors"
+                          title="Sửa câu lệnh"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                       <button
                         onClick={() => handleDeletePrompt(prompt.id)}
                         className="p-1.5 bg-white hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-lg border border-slate-200 transition-colors"
@@ -625,8 +1005,70 @@ export const MemberProfile: React.FC<MemberProfileProps> = ({
             )}
           </div>
 
+          {/* List 3: Articles */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+              <span className="text-xs font-extrabold text-slate-500 uppercase tracking-widest flex items-center">
+                <FileText className="w-4 h-4 mr-1.5 text-emerald-500" />
+                Bài viết đã đăng ({userArticles.length})
+              </span>
+            </div>
+
+            {userArticles.length === 0 ? (
+              <div className="text-center py-10 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
+                <p className="text-xs text-slate-400 font-medium italic">Bạn chưa viết bài chia sẻ nào.</p>
+              </div>
+            ) : (
+              <div className="space-y-2.5">
+                {userArticles.map(article => (
+                  <div key={article.id} className="p-3.5 bg-slate-50 border border-slate-150 rounded-xl flex items-center justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center space-x-2">
+                        <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase ${
+                          article.status === 'Published' ? 'bg-emerald-100 text-emerald-700' : 'bg-yellow-100 text-yellow-700'
+                        }`}>
+                          {article.status === 'Published' ? 'Đã xuất bản' : 'Bản nháp'}
+                        </span>
+                        <span className="text-[10px] text-slate-400 font-bold uppercase">{article.category}</span>
+                      </div>
+                      <h4 className="text-xs font-bold text-slate-900 truncate mt-1">{article.title}</h4>
+                      <p className="text-[9px] text-slate-400 font-medium">Ngày đăng: {article.publishedAt}</p>
+                    </div>
+                    <div className="flex items-center space-x-1 shrink-0">
+                      {onEditArticle && (
+                        <button
+                          onClick={() => onEditArticle(article)}
+                          className="p-1.5 bg-white hover:bg-emerald-50 text-slate-400 hover:text-emerald-600 rounded-lg border border-slate-200 transition-colors"
+                          title="Sửa bài viết"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleDeleteArticle(article.id)}
+                        className="p-1.5 bg-white hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-lg border border-slate-200 transition-colors"
+                        title="Xóa bài viết"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
         </div>
       </div>
+
+      {/* Article Reader Modal inside Profile when an article from favorites is opened */}
+      {readingArticle && (
+        <ArticleReaderModal
+          article={readingArticle}
+          currentUser={currentUser}
+          onClose={() => setReadingArticle(null)}
+        />
+      )}
     </div>
   );
 };
