@@ -70,7 +70,23 @@ export const DesignHub: React.FC<DesignHubProps> = ({ currentUser, files, onFile
     if (target) {
       const updatedItem = { ...target, downloadsCount: target.downloadsCount + 1 };
       saveDesignToDb(updatedItem).catch(err => console.warn("Failed to update download count in Firestore:", err));
-      toastSuccess(`Đang tải file "${target.title}"... Chúc bạn có ấn phẩm thiết kế tuyệt đẹp!`, 'Bắt đầu tải xuống');
+      toastSuccess(`Đang tải file "${target.title}"...`, 'Bắt đầu tải xuống');
+
+      // If attached file base64 data exists, trigger direct browser download
+      if (target.attachedFileData) {
+        const link = document.createElement('a');
+        link.href = target.attachedFileData;
+        link.download = target.attachedFileName || `${target.title}.zip`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      } else if (target.driveUrl && target.driveUrl.startsWith('http')) {
+        // Open valid Google Drive or external URL
+        window.open(target.driveUrl, '_blank', 'noopener,noreferrer');
+      } else {
+        // Fallback to shared Google Drive folder
+        window.open(DRIVE_DESIGN_FOLDER, '_blank', 'noopener,noreferrer');
+      }
     }
     const updated = files.map(f => {
       if (f.id === fileId) {

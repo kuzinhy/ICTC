@@ -73,9 +73,18 @@ export const NewProductsShowcase: React.FC<NewProductsShowcaseProps> = ({
 
     setFiles(prev => prev.map(f => f.id === file.id ? updatedItem : f));
 
-    // Open link
-    const targetUrl = file.driveUrl || DRIVE_DESIGN_FOLDER;
-    window.open(targetUrl, '_blank', 'noopener,noreferrer');
+    // Open link or trigger direct download
+    if (file.attachedFileData) {
+      const link = document.createElement('a');
+      link.href = file.attachedFileData;
+      link.download = file.attachedFileName || `${file.title}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } else {
+      const targetUrl = (file.driveUrl && file.driveUrl.startsWith('http')) ? file.driveUrl : DRIVE_DESIGN_FOLDER;
+      window.open(targetUrl, '_blank', 'noopener,noreferrer');
+    }
   };
 
   const handleCardClick = (file: DesignFile) => {

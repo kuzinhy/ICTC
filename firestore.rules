@@ -84,8 +84,7 @@ service cloud.firestore {
 
     // Match rules for users
     match /users/{userId} {
-      allow get: if isOwner(userId) || isAdmin();
-      allow list: if isAdmin();
+      allow read: if true;
       allow create: if isSignedIn() && (isOwner(userId) || isAdmin()) && isValidUser(getIncomingData());
       allow update: if isSignedIn() && (isAdmin() || (isOwner(userId) && isValidUser(getIncomingData())));
       allow delete: if isAdmin();
