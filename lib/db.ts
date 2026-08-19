@@ -312,3 +312,49 @@ export async function deleteFontFromDb(fontId: string): Promise<void> {
   }
 }
 
+// ---------------------------------------------
+// Personal Photo Prompts Sync Helper
+// ---------------------------------------------
+import { PersonalPhotoPromptItem } from '../components/PersonalPhotoPromptHub';
+
+export async function fetchPersonalPhotoPromptsFromDb(): Promise<PersonalPhotoPromptItem[]> {
+  try {
+    const querySnapshot = await getDocs(collection(db, 'personalPhotoPrompts'));
+    const items: PersonalPhotoPromptItem[] = [];
+    querySnapshot.forEach((doc) => {
+      items.push({ id: doc.id, ...doc.data() } as PersonalPhotoPromptItem);
+    });
+    if (items.length > 0) {
+      return items;
+    }
+  } catch (error) {
+    // Fallback gracefully
+  }
+  
+  const local = localStorage.getItem('ictc_personal_photo_prompts');
+  if (local) {
+    try { return JSON.parse(local); } catch (e) {}
+  }
+  return [];
+}
+
+export async function savePersonalPhotoPromptToDb(item: PersonalPhotoPromptItem): Promise<void> {
+  try {
+    const docRef = doc(db, 'personalPhotoPrompts', item.id);
+    await setDoc(docRef, item);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, `personalPhotoPrompts/${item.id}`);
+    throw error;
+  }
+}
+
+export async function deletePersonalPhotoPromptFromDb(id: string): Promise<void> {
+  try {
+    const docRef = doc(db, 'personalPhotoPrompts', id);
+    await deleteDoc(docRef);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `personalPhotoPrompts/${id}`);
+    throw error;
+  }
+}
+

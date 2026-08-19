@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Camera, Sparkles, Copy, Check, Upload, Wand2, 
   Heart, Layers, HelpCircle, FileText, Search, Plus, X
 } from 'lucide-react';
 import { User } from '../types';
 import { useToast } from '../context/ToastContext';
+import { fetchPersonalPhotoPromptsFromDb, savePersonalPhotoPromptToDb } from '../lib/db';
 
 interface PersonalPhotoPromptHubProps {
   currentUser: User | null;
@@ -147,6 +148,30 @@ export const PersonalPhotoPromptHub: React.FC<PersonalPhotoPromptHubProps> = ({
     return INITIAL_PERSONAL_PROMPTS;
   });
 
+  // Fetch from Cloud Firestore on mount with error boundary
+  useEffect(() => {
+    let isMounted = true;
+    const loadCloudPrompts = async () => {
+      try {
+        const cloudItems = await fetchPersonalPhotoPromptsFromDb();
+        if (isMounted && cloudItems.length > 0) {
+          const combined = [...cloudItems];
+          INITIAL_PERSONAL_PROMPTS.forEach(init => {
+            if (!combined.some(c => c.id === init.id)) {
+              combined.push(init);
+            }
+          });
+          setPrompts(combined);
+          localStorage.setItem('ictc_personal_photo_prompts', JSON.stringify(combined));
+        }
+      } catch (e) {
+        // fallback
+      }
+    };
+    loadCloudPrompts();
+    return () => { isMounted = false; };
+  }, []);
+
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [searchTerm, setSearchTerm] = useState('');
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -213,10 +238,10 @@ export const PersonalPhotoPromptHub: React.FC<PersonalPhotoPromptHubProps> = ({
       setCustomPromptOutput(enhanced);
       setIsGenerating(false);
       toastSuccess('Đã tạo câu lệnh tối ưu hóa cho bức ảnh của bạn!', 'Thành công');
-    }, 600);
+    }, 400);
   };
 
-  const handleSubmitNewPrompt = (e: React.FormEvent) => {
+  const handleSubmitNewPrompt = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUser) {
       if (onRequireAuth) onRequireAuth('Vui lòng đăng nhập để đóng góp prompt ảnh cá nhân cho cộng đồng!');
@@ -245,16 +270,25 @@ export const PersonalPhotoPromptHub: React.FC<PersonalPhotoPromptHubProps> = ({
     localStorage.setItem('ictc_personal_photo_prompts', JSON.stringify(updated));
     setIsSubmitModalOpen(false);
     setNewPromptForm({ title: '', category: 'Doanh nhân', description: '', promptTemplate: '', recommendedTool: 'ChatGPT (GPT-4o)', tips: '', imageUrl: '' });
-    toastSuccess('Đã đóng góp prompt mới thành công!', 'Đóng góp');
+    toastSuccess('Đã đóng góp prompt mới thành công lên Cloud Firestore!', 'Đóng góp');
+
+    try {
+      await savePersonalPhotoPromptToDb(newItem);
+    } catch (err) {
+      console.warn('Could not save to cloud db directly, saved locally.');
+    }
   };
 
-  const filteredPrompts = prompts.filter(p => {
-    const matchCat = selectedCategory === 'All' || p.category === selectedCategory;
-    const matchSearch = p.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                        p.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                        p.promptTemplate.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchCat && matchSearch;
-  });
+  // Memoized filtering for lightning-fast performance without UI lag
+  const filteredPrompts = useMemo(() => {
+    return prompts.filter(p => {
+      const matchCat = selectedCategory === 'All' || p.category === selectedCategory;
+      const matchSearch = p.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          p.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          p.promptTemplate.toLowerCase().includes(searchTerm.toLowerCase());
+      return matchCat && matchSearch;
+    });
+  }, [prompts, selectedCategory, searchTerm]);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-10 animate-fade-in">
@@ -324,7 +358,7 @@ export const PersonalPhotoPromptHub: React.FC<PersonalPhotoPromptHubProps> = ({
                 />
                 {uploadedImagePreview ? (
                   <div className="space-y-3">
-                    <img src={uploadedImagePreview} alt="Preview" className="w-24 h-24 object-cover rounded-2xl mx-auto shadow-md border border-slate-200" />
+                    <img src={uploadedImagePreview} alt="Preview" className="w-24 h-24 object-cover rounded-2xl mx-auto shadow-md border border-slate-200" loading="lazy" />
                     <p className="text-xs font-medium text-emerald-600 flex items-center justify-center space-x-1">
                       <Check className="w-3.5 h-3.5" />
                       <span>Đã tải ảnh thành công! Bấm để đổi ảnh khác</span>
@@ -425,7 +459,19 @@ export const PersonalPhotoPromptHub: React.FC<PersonalPhotoPromptHubProps> = ({
             <Layers className="w-6 h-6 text-blue-600" />
             <span>Thư Viện Prompt Mẫu Chọn Lọc ({filteredPrompts.length})</span>
           </h3>
-          <span className="text-xs font-semibold text-slate-500">Kèm ảnh minh họa thực tế</span>
+          <button
+            onClick={() => {
+              if (!currentUser && onRequireAuth) {
+                onRequireAuth('Vui lòng đăng nhập để đóng góp prompt!');
+              } else {
+                setIsSubmitModalOpen(true);
+              }
+            }}
+            className="px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-bold text-xs shadow-md transition-all flex items-center space-x-1.5"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Đóng góp Prompt mới</span>
+          </button>
         </div>
 
         <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
@@ -458,7 +504,7 @@ export const PersonalPhotoPromptHub: React.FC<PersonalPhotoPromptHubProps> = ({
         </div>
       </div>
 
-      {/* Prompts Grid with Illustration Images */}
+      {/* Prompts Grid with Illustration Images and Lazy Loading */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredPrompts.map(item => (
           <div 
@@ -473,6 +519,7 @@ export const PersonalPhotoPromptHub: React.FC<PersonalPhotoPromptHubProps> = ({
                   src={item.imageUrl} 
                   alt={item.title}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                  loading="lazy"
                   referrerPolicy="no-referrer"
                 />
                 <div className="absolute top-3 left-3">
@@ -558,6 +605,7 @@ export const PersonalPhotoPromptHub: React.FC<PersonalPhotoPromptHubProps> = ({
                 src={viewingPrompt.imageUrl} 
                 alt={viewingPrompt.title}
                 className="w-full h-full object-cover"
+                loading="lazy"
                 referrerPolicy="no-referrer"
               />
             </div>

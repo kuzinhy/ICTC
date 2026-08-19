@@ -150,6 +150,14 @@ export const NewProductsShowcase: React.FC<NewProductsShowcaseProps> = ({
                   alt={file.title}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                   referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    if (file.fallbackPreviewUrl && target.src !== file.fallbackPreviewUrl) {
+                      target.src = file.fallbackPreviewUrl;
+                    } else {
+                      target.src = 'https://images.unsplash.com/photo-1542744094-3a31f103e35f?auto=format&fit=crop&w=800&q=80';
+                    }
+                  }}
                 />
                 <span className="absolute top-0.5 right-0.5 px-1 py-0.2 bg-rose-500 text-white text-[8px] font-black rounded uppercase">
                   MỚI
@@ -263,6 +271,14 @@ export const NewProductsShowcase: React.FC<NewProductsShowcaseProps> = ({
                 alt={file.title}
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                 referrerPolicy="no-referrer"
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  if (file.fallbackPreviewUrl && target.src !== file.fallbackPreviewUrl) {
+                    target.src = file.fallbackPreviewUrl;
+                  } else {
+                    target.src = 'https://images.unsplash.com/photo-1542744094-3a31f103e35f?auto=format&fit=crop&w=800&q=80';
+                  }
+                }}
               />
               <div className="absolute inset-0 bg-gradient-to-t from-slate-950/40 via-transparent to-transparent opacity-60 group-hover:opacity-40 transition-opacity" />
               

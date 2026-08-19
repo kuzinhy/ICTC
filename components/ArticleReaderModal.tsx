@@ -602,6 +602,14 @@ export const ArticleReaderModal: React.FC<ArticleReaderModalProps> = ({
                 alt={article.title} 
                 className="w-full h-full object-cover"
                 referrerPolicy="no-referrer"
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  if (article.fallbackCoverImage && target.src !== article.fallbackCoverImage) {
+                    target.src = article.fallbackCoverImage;
+                  } else {
+                    target.src = 'https://images.unsplash.com/photo-1626785774573-4b799315345d?auto=format&fit=crop&w=1200&q=80';
+                  }
+                }}
               />
             </div>
           )}

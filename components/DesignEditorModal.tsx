@@ -28,6 +28,7 @@ export const DesignEditorModal: React.FC<DesignEditorModalProps> = ({
   const [fileSize, setFileSize] = useState('15 MB');
   const [driveUrl, setDriveUrl] = useState('');
   const [previewUrl, setPreviewUrl] = useState('https://images.unsplash.com/photo-1542744094-3a31f103e35f?auto=format&fit=crop&w=800&q=80');
+  const [fallbackPreviewUrl, setFallbackPreviewUrl] = useState('');
   const [description, setDescription] = useState('');
   const [tags, setTags] = useState('');
   const [status, setStatus] = useState<'Approved' | 'Pending' | 'Rejected'>('Approved');
@@ -120,6 +121,7 @@ export const DesignEditorModal: React.FC<DesignEditorModalProps> = ({
       setFileSize(editingFile.fileSize || '10 MB');
       setDriveUrl(editingFile.driveUrl);
       setPreviewUrl(editingFile.previewUrl);
+      setFallbackPreviewUrl(editingFile.fallbackPreviewUrl || '');
       setDescription(editingFile.description);
       setTags(editingFile.tags.join(', '));
       setStatus(editingFile.status || 'Approved');
@@ -132,6 +134,7 @@ export const DesignEditorModal: React.FC<DesignEditorModalProps> = ({
       setFileSize('12 MB');
       setDriveUrl('');
       setPreviewUrl('https://images.unsplash.com/photo-1542744094-3a31f103e35f?auto=format&fit=crop&w=800&q=80');
+      setFallbackPreviewUrl('');
       setDescription('');
       setTags('Powerpoint, Template, Blue, Gold');
       setStatus('Approved');
@@ -180,6 +183,7 @@ export const DesignEditorModal: React.FC<DesignEditorModalProps> = ({
       fileSize,
       driveUrl,
       previewUrl: previewUrl || 'https://images.unsplash.com/photo-1542744094-3a31f103e35f?auto=format&fit=crop&w=800&q=80',
+      fallbackPreviewUrl: fallbackPreviewUrl.trim() || undefined,
       tags: tagArray,
       downloadsCount: editingFile?.downloadsCount || 0,
       rating: editingFile?.rating || 5.0,
@@ -441,6 +445,21 @@ export const DesignEditorModal: React.FC<DesignEditorModalProps> = ({
                   />
                 </div>
               )}
+            </div>
+
+            {/* Fallback Preview Cover URL */}
+            <div className="sm:col-span-2 space-y-1 pt-2">
+              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Ảnh đại diện dự phòng (Fallback / Backup Image URL)</label>
+              <input
+                type="url"
+                value={fallbackPreviewUrl}
+                onChange={(e) => setFallbackPreviewUrl(e.target.value)}
+                placeholder="https://... (Sử dụng tự động khi ảnh chính bị lỗi không load được)"
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white"
+              />
+              <p className="text-[10px] text-slate-400">
+                * Tùy chọn: Nhập liên kết ảnh thay thế trong trường hợp ảnh chính gặp sự cố mạng hoặc không thể hiển thị.
+              </p>
             </div>
 
             {/* Description */}

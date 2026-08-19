@@ -448,6 +448,14 @@ export const DesignHub: React.FC<DesignHubProps> = ({ currentUser, files, onFile
                       alt={file.title}
                       className="w-full h-full object-cover group-hover:scale-102 transition-transform duration-500"
                       referrerPolicy="no-referrer"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        if (file.fallbackPreviewUrl && target.src !== file.fallbackPreviewUrl) {
+                          target.src = file.fallbackPreviewUrl;
+                        } else {
+                          target.src = 'https://images.unsplash.com/photo-1542744094-3a31f103e35f?auto=format&fit=crop&w=800&q=80';
+                        }
+                      }}
                     />
                     
                     {/* File type badge */}

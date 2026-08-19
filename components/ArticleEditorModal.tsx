@@ -43,6 +43,7 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
   const [summary, setSummary] = useState('');
   const [content, setContent] = useState('');
   const [coverImage, setCoverImage] = useState(PRESET_COVERS[0].url);
+  const [fallbackCoverImage, setFallbackCoverImage] = useState('');
   const [readTimeMinutes, setReadTimeMinutes] = useState(5);
   const [tagsInput, setTagsInput] = useState('ICTC, Thiết Kế, Chia Sẻ');
   const [isPinned, setIsPinned] = useState(false);
@@ -59,6 +60,7 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
       setSummary(articleToEdit.summary || '');
       setContent(articleToEdit.content || '');
       setCoverImage(articleToEdit.coverImage || PRESET_COVERS[0].url);
+      setFallbackCoverImage(articleToEdit.fallbackCoverImage || '');
       setReadTimeMinutes(articleToEdit.readTimeMinutes || 5);
       setTagsInput(articleToEdit.tags?.join(', ') || 'ICTC, Thiết Kế');
       setIsPinned(!!articleToEdit.isPinned);
@@ -70,6 +72,7 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
       setSummary('');
       setContent(`### Giới thiệu tổng quan\n\nChia sẻ kinh nghiệm thiết kế slide báo cáo và ấn phẩm truyền thông chuyên nghiệp...\n\n### 1. Các nguyên tắc cốt lõi\n- Bố cục lưới (Grid system)\n- Phối màu theo tiêu chuẩn nhận diện thương hiệu\n- Phông chữ Việt hóa chuẩn dấu\n\n### 2. Lời khuyên khi xuất bản\nLuôn xuất bản định dạng PDF chất lượng cao hoặc tệp gốc Google Slides.`);
       setCoverImage(PRESET_COVERS[0].url);
+      setFallbackCoverImage('');
       setReadTimeMinutes(4);
       setTagsInput('ICTC, Slide, Báo Cáo, Thiết Kế');
       setIsPinned(false);
@@ -119,6 +122,7 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
       summary: summary.trim(),
       content: content.trim(),
       coverImage: coverImage.trim() || PRESET_COVERS[0].url,
+      fallbackCoverImage: fallbackCoverImage.trim() || undefined,
       category,
       author: articleToEdit?.author || currentAuthorName || 'Ban Quản trị ICTC',
       authorAvatar: articleToEdit?.authorAvatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${currentAuthorName}`,
@@ -314,6 +318,21 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
                       {preset.label}
                     </button>
                   ))}
+                </div>
+
+                {/* Fallback Cover Image URL */}
+                <div className="space-y-1 pt-2">
+                  <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Ảnh đại diện dự phòng (Fallback Cover Image URL)</label>
+                  <input
+                    type="url"
+                    value={fallbackCoverImage}
+                    onChange={(e) => setFallbackCoverImage(e.target.value)}
+                    placeholder="https://... (Sử dụng tự động khi ảnh bìa chính bị lỗi không load được)"
+                    className="w-full bg-slate-50 text-slate-900 px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs font-mono focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  />
+                  <p className="text-[10px] text-slate-400">
+                    * Tùy chọn: Nhập link ảnh thay thế khi ảnh bìa chính gặp sự cố kết nối hoặc không hiển thị được.
+                  </p>
                 </div>
               </div>
 

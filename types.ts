@@ -55,6 +55,7 @@ export interface DesignFile {
   fileSize: string;
   driveUrl: string;
   previewUrl: string;
+  fallbackPreviewUrl?: string;
   tags: string[];
   downloadsCount: number;
   rating: number;
@@ -99,6 +100,7 @@ export interface Article {
   summary: string;
   content: string;
   coverImage: string;
+  fallbackCoverImage?: string;
   category: 'Mẹo thiết kế' | 'Nghiên cứu & Đồ án' | 'Thủ thuật AI' | 'Kỹ năng thuyết trình' | 'Thông báo & Sự kiện';
   author: string;
   authorId?: string;
