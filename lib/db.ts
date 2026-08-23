@@ -123,7 +123,19 @@ export async function saveDesignToDb(design: DesignFile): Promise<void> {
   }
 }
 
+export function recordDeletedId(id: string): void {
+  try {
+    const saved = localStorage.getItem('ictc_deleted_ids');
+    const list = saved ? JSON.parse(saved) : [];
+    if (!list.includes(id)) {
+      list.push(id);
+      localStorage.setItem('ictc_deleted_ids', JSON.stringify(list));
+    }
+  } catch (e) {}
+}
+
 export async function deleteDesignFromDb(designId: string): Promise<void> {
+  recordDeletedId(designId);
   try {
     const docRef = doc(db, 'designs', designId);
     await deleteDoc(docRef);
@@ -168,6 +180,7 @@ export async function savePromptToDb(prompt: AIPrompt): Promise<void> {
 }
 
 export async function deletePromptFromDb(promptId: string): Promise<void> {
+  recordDeletedId(promptId);
   try {
     const docRef = doc(db, 'prompts', promptId);
     await deleteDoc(docRef);
@@ -259,6 +272,7 @@ export async function saveArticleToDb(article: Article): Promise<void> {
 }
 
 export async function deleteArticleFromDb(articleId: string): Promise<void> {
+  recordDeletedId(articleId);
   try {
     const docRef = doc(db, 'articles', articleId);
     await deleteDoc(docRef);

@@ -19,8 +19,9 @@ export const FullscreenSlideViewerModal: React.FC<FullscreenSlideViewerModalProp
   if (!isOpen || !design) return null;
 
   // Generate slide preview images or use preview image & additional screenshots
+  const mainImage = design.previewUrl || (design as any).previewImage || 'https://images.unsplash.com/photo-1542744094-3a31f103e35f?auto=format&fit=crop&w=1200&q=80';
   const slides = [
-    design.previewImage,
+    mainImage,
     ...(design.previewScreenshots || []),
     'https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=1200&q=80',
     'https://images.unsplash.com/photo-1542744094-3a31b272c490?auto=format&fit=crop&w=1200&q=80'
@@ -112,6 +113,7 @@ export const FullscreenSlideViewerModal: React.FC<FullscreenSlideViewerModalProp
             exit={{ opacity: 0, scale: 1.05 }}
             transition={{ duration: 0.3 }}
             className="max-h-full max-w-full object-contain rounded-2xl shadow-2xl border border-slate-800"
+            referrerPolicy="no-referrer"
           />
         </AnimatePresence>
 
@@ -141,7 +143,7 @@ export const FullscreenSlideViewerModal: React.FC<FullscreenSlideViewerModalProp
               idx === currentIndex ? 'border-blue-500 scale-105 shadow-md shadow-blue-500/30' : 'border-slate-800 opacity-60 hover:opacity-100'
             }`}
           >
-            <img src={img} alt={`Thumb ${idx + 1}`} className="w-16 h-10 object-cover" />
+            <img src={img} alt={`Thumb ${idx + 1}`} className="w-16 h-10 object-cover" referrerPolicy="no-referrer" />
             <span className="absolute bottom-0 right-0 bg-slate-950/80 px-1 text-[9px] font-bold text-slate-300">{idx + 1}</span>
           </button>
         ))}

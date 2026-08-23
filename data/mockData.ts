@@ -1,7 +1,8 @@
 import { DesignFile, AIPrompt, User, SystemConfig, Article, CommunityIdea } from '../types';
 import { DRIVE_PPT_FOLDER, DRIVE_DESIGN_FOLDER, DRIVE_PROMPT_FOLDER } from './constants';
+import { CURATED_COMMUNITY_ARTICLES } from './curatedArticlesData';
 
-export { DRIVE_PPT_FOLDER, DRIVE_DESIGN_FOLDER, DRIVE_PROMPT_FOLDER };
+export { DRIVE_PPT_FOLDER, DRIVE_DESIGN_FOLDER, DRIVE_PROMPT_FOLDER, CURATED_COMMUNITY_ARTICLES };
 
 export const INITIAL_USERS: User[] = [
   {
@@ -443,7 +444,8 @@ Hãy tham gia đóng góp những mẫu thiết kế xuất sắc của bạn đ
     tags: ['Thông Báo', 'ICTC', 'Cộng Đồng', 'Tính Năng Mới'],
     isPinned: true,
     status: 'Published'
-  }
+  },
+  ...CURATED_COMMUNITY_ARTICLES
 ];
 
 export const INITIAL_COMMUNITY_IDEAS: CommunityIdea[] = [

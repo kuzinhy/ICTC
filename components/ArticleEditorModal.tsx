@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { Article, DesignFile } from '../types';
 import { saveArticleToDb } from '../lib/db';
+import { normalizeImageUrl, getProxyImageUrl } from '../lib/imageUtils';
 
 interface ArticleEditorModalProps {
   isOpen: boolean;
@@ -153,7 +154,7 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md animate-fade-in overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-950/70 backdrop-blur-md animate-fade-in overflow-y-auto">
       <div className="bg-white rounded-3xl border border-slate-200/90 w-full max-w-4xl max-h-[92vh] overflow-hidden shadow-2xl flex flex-col relative my-auto">
         
         {/* Modal Header */}
@@ -282,24 +283,33 @@ export const ArticleEditorModal: React.FC<ArticleEditorModalProps> = ({
                   </label>
                 </div>
 
-                <div className="flex gap-3">
+                <div className="flex gap-3 items-center">
                   <input
                     type="url"
                     required
                     value={coverImage}
-                    onChange={(e) => setCoverImage(e.target.value)}
-                    placeholder="https://images.unsplash.com/..."
+                    onChange={(e) => setCoverImage(normalizeImageUrl(e.target.value))}
+                    placeholder="https://images.unsplash.com/... hoặc https://sv2.anhsieuviet.com/..."
                     className="flex-1 bg-slate-50 text-slate-900 px-3.5 py-2 rounded-xl border border-slate-200 text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
                   />
                   {coverImage && (
-                    <img
-                      src={coverImage}
-                      alt="Cover Preview"
-                      className="w-10 h-10 rounded-xl object-cover border border-slate-200 shadow-xs"
-                      onError={(e) => {
-                        (e.target as any).src = PRESET_COVERS[0].url;
-                      }}
-                    />
+                    <div className="relative group shrink-0">
+                      <img
+                        src={coverImage}
+                        alt="Cover Preview"
+                        className="w-12 h-12 rounded-xl object-cover border border-slate-200 shadow-xs"
+                        referrerPolicy="no-referrer"
+                        onError={(e) => {
+                          const img = e.currentTarget;
+                          const proxy = getProxyImageUrl(coverImage);
+                          if (img.src !== proxy && !coverImage.includes('images.weserv.nl')) {
+                            img.src = proxy;
+                          } else {
+                            img.src = PRESET_COVERS[0].url;
+                          }
+                        }}
+                      />
+                    </div>
                   )}
                 </div>
 

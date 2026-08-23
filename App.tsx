@@ -16,6 +16,11 @@ import { VietnamDesignPaletteModal } from './components/VietnamDesignPaletteModa
 import { LegalComplianceModal } from './components/LegalComplianceModal';
 import { IdeaHubModal } from './components/IdeaHubModal';
 import { DesignEditorModal } from './components/DesignEditorModal';
+import { AISlideGeneratorModal } from './components/AISlideGeneratorModal';
+import { AcademicCopilotModal } from './components/AcademicCopilotModal';
+import { MisaAmisHeroSection } from './components/MisaAmisHeroSection';
+import { MisaAmisFloatingWidget } from './components/MisaAmisFloatingWidget';
+import { WorkflowActionBar } from './components/WorkflowActionBar';
 import { User, SystemConfig, Article, DesignFile, AIPrompt, VietnameseFont } from './types';
 import { 
   INITIAL_USERS, DEFAULT_SYSTEM_CONFIG, INITIAL_DESIGN_FILES, 
@@ -28,7 +33,7 @@ import {
   Shield, User as UserIcon, Settings, HelpCircle, Activity,
   BookOpen, Search, Command, Palette, Scale, ShieldCheck, Type,
   Filter, ChevronDown, Check, Code, GraduationCap, TrendingUp, Award, Layers,
-  Bell, Lightbulb, Zap, Plus
+  Bell, Lightbulb, Zap, Plus, ArrowRight
 } from 'lucide-react';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth, db } from './lib/firebase';
@@ -74,6 +79,22 @@ const App: React.FC = () => {
   const [isIdeaHubOpen, setIsIdeaHubOpen] = useState(false);
   const [isDirectDesignEditorOpen, setIsDirectDesignEditorOpen] = useState(false);
   const [directDesignInitialTitle, setDirectDesignInitialTitle] = useState<string | undefined>();
+  const [bookmarkedCount, setBookmarkedCount] = useState<number>(0);
+
+  // Sync bookmarks count
+  useEffect(() => {
+    const updateCount = () => {
+      try {
+        const saved = JSON.parse(localStorage.getItem('ictc_bookmarks') || '[]');
+        setBookmarkedCount(Array.isArray(saved) ? saved.length : 0);
+      } catch (e) {
+        setBookmarkedCount(0);
+      }
+    };
+    updateCount();
+    window.addEventListener('storage', updateCount);
+    return () => window.removeEventListener('storage', updateCount);
+  }, []);
 
   // Count pending items waiting for moderation
   const pendingCount = useMemo(() => {
@@ -85,6 +106,20 @@ const App: React.FC = () => {
 
   // Consolidate data initialization and sync
   useEffect(() => {
+    const isDeletedItem = (title: string = '', id?: string) => {
+      if (id) {
+        try {
+          const deletedIds = JSON.parse(localStorage.getItem('ictc_deleted_ids') || '[]');
+          if (Array.isArray(deletedIds) && deletedIds.includes(id)) return true;
+        } catch (e) {}
+      }
+      const t = title.toLowerCase();
+      return t.includes('mau ppt vai tro doan tncs hcm') || 
+             t.includes('mẫu ppt vai trò đoàn tncs hcm') ||
+             (t.includes('mau ppt') && t.includes('vai tro')) ||
+             (t.includes('mẫu ppt') && t.includes('vai trò'));
+    };
+
     const initializeData = async () => {
       // 1. Initial local state from storage or mock
       const getLocal = (key: string, fallback: any) => {
@@ -98,11 +133,38 @@ const App: React.FC = () => {
         localCfg.googleAppsScriptUrl = DEFAULT_SYSTEM_CONFIG.googleAppsScriptUrl;
       }
       setSystemConfig(localCfg);
-      setDesignFiles(getLocal('ictc_design_files', INITIAL_DESIGN_FILES));
-      setAiPrompts(getLocal('ictc_ai_prompts', INITIAL_AI_PROMPTS));
-      setArticles(getLocal('ictc_articles', INITIAL_ARTICLES));
+
+      const localDesigns = getLocal('ictc_design_files', INITIAL_DESIGN_FILES).filter((item: any) => !isDeletedItem(item.title, item.id));
+      
+      // Merge initial curated prompts & articles with stored ones to guarantee new curated content is always available
+      const rawStoredPrompts = getLocal('ictc_ai_prompts', INITIAL_AI_PROMPTS);
+      const promptMap = new Map<string, any>();
+      INITIAL_AI_PROMPTS.forEach(p => promptMap.set(p.id, p));
+      if (Array.isArray(rawStoredPrompts)) {
+        rawStoredPrompts.forEach((p: any) => promptMap.set(p.id, p));
+      }
+      const localPrompts = Array.from(promptMap.values()).filter((item: any) => !isDeletedItem(item.title, item.id));
+
+      const rawStoredArticles = getLocal('ictc_articles', INITIAL_ARTICLES);
+      const articleMap = new Map<string, any>();
+      INITIAL_ARTICLES.forEach(a => articleMap.set(a.id, a));
+      if (Array.isArray(rawStoredArticles)) {
+        rawStoredArticles.forEach((a: any) => articleMap.set(a.id, a));
+      }
+      const localArticles = Array.from(articleMap.values()).filter((item: any) => !isDeletedItem(item.title, item.id));
+
+      setDesignFiles(localDesigns);
+      setAiPrompts(localPrompts);
+      setArticles(localArticles);
       setFontsList(getLocal('ictc_vietnamese_fonts', VIETNAMESE_FONTS_DATA));
       setUserList(getLocal('ictc_registered_users', INITIAL_USERS));
+
+      // Clean bookmarks in localStorage
+      const localBookmarks = getLocal('ictc_bookmarks', []);
+      if (Array.isArray(localBookmarks) && localBookmarks.length > 0) {
+        const cleanedBookmarks = localBookmarks.filter((bm: any) => !isDeletedItem(bm.title || '', bm.targetId || bm.id));
+        localStorage.setItem('ictc_bookmarks', JSON.stringify(cleanedBookmarks));
+      }
 
       // 2. Fetch fresh data from Cloud
       try {
@@ -120,16 +182,19 @@ const App: React.FC = () => {
           localStorage.setItem('ictc_system_config', JSON.stringify(config));
         }
         if (designs?.length) {
-          setDesignFiles(designs);
-          localStorage.setItem('ictc_design_files', JSON.stringify(designs));
+          const cleaned = designs.filter(item => !isDeletedItem(item.title, item.id));
+          setDesignFiles(cleaned);
+          localStorage.setItem('ictc_design_files', JSON.stringify(cleaned));
         }
         if (prompts?.length) {
-          setAiPrompts(prompts);
-          localStorage.setItem('ictc_ai_prompts', JSON.stringify(prompts));
+          const cleaned = prompts.filter(item => !isDeletedItem(item.title, item.id));
+          setAiPrompts(cleaned);
+          localStorage.setItem('ictc_ai_prompts', JSON.stringify(cleaned));
         }
         if (arts?.length) {
-          setArticles(arts);
-          localStorage.setItem('ictc_articles', JSON.stringify(arts));
+          const cleaned = arts.filter(item => !isDeletedItem(item.title, item.id));
+          setArticles(cleaned);
+          localStorage.setItem('ictc_articles', JSON.stringify(cleaned));
         }
         if (dbFonts?.length) {
           setFontsList(dbFonts);
@@ -150,7 +215,7 @@ const App: React.FC = () => {
     const unsubDesigns = onSnapshot(
       collection(db, 'designs'),
       (snap) => {
-        const items = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as DesignFile));
+        const items = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as DesignFile)).filter(item => !isDeletedItem(item.title, item.id));
         if (items.length > 0) {
           setDesignFiles(items);
           localStorage.setItem('ictc_design_files', JSON.stringify(items));
@@ -164,7 +229,7 @@ const App: React.FC = () => {
     const unsubPrompts = onSnapshot(
       collection(db, 'prompts'),
       (snap) => {
-        const items = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as AIPrompt));
+        const items = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as AIPrompt)).filter(item => !isDeletedItem(item.title, item.id));
         if (items.length > 0) {
           setAiPrompts(items);
           localStorage.setItem('ictc_ai_prompts', JSON.stringify(items));
@@ -178,7 +243,7 @@ const App: React.FC = () => {
     const unsubArticles = onSnapshot(
       collection(db, 'articles'),
       (snap) => {
-        const items = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Article));
+        const items = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Article)).filter(item => !isDeletedItem(item.title, item.id));
         if (items.length > 0) {
           setArticles(items);
           localStorage.setItem('ictc_articles', JSON.stringify(items));
@@ -342,13 +407,21 @@ const App: React.FC = () => {
   const [isPaletteOpen, setIsPaletteOpen] = useState(false);
   const [isLegalOpen, setIsLegalOpen] = useState(false);
   const [legalTab, setLegalTab] = useState<'ip_policy' | 'community_rules' | 'ai_ethics' | 'dmca_takedown'>('ip_policy');
+  const [isSlideGeneratorOpen, setIsSlideGeneratorOpen] = useState(false);
+  const [isCopilotOpen, setIsCopilotOpen] = useState(false);
 
-  // Listen for Ctrl+K or Cmd+K
+  // Global Keyboard Shortcuts (Cmd+K: Search, Cmd+J: Copilot, Cmd+B: Vietnam Palette)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         setIsCommandSearchOpen(prev => !prev);
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'j') {
+        e.preventDefault();
+        setIsCopilotOpen(prev => !prev);
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'b') {
+        e.preventDefault();
+        setIsPaletteOpen(prev => !prev);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -394,14 +467,14 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans selection:bg-blue-500/10 selection:text-blue-700">
       
-      {/* Top Banner Announcement Bar */}
-      <div className="bg-gradient-to-r from-red-700 via-rose-700 to-amber-700 text-white py-1.5 px-4 text-xs font-semibold relative z-50 shadow-xs">
+      {/* Top Banner Announcement Bar - Modern Blue Gradient */}
+      <div className="bg-gradient-to-r from-slate-950 via-blue-900 to-indigo-800 text-white py-1.5 px-4 text-xs font-semibold relative z-50 shadow-xs border-b border-blue-700/30">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
           <div className="flex items-center space-x-2 truncate">
-            <span className="px-2 py-0.5 bg-amber-400 text-slate-950 text-[10px] font-black rounded-md uppercase tracking-wider shrink-0 shadow-xs">
+            <span className="px-2 py-0.5 bg-cyan-400 text-slate-950 text-[10px] font-black rounded-md uppercase tracking-wider shrink-0 shadow-xs">
               🇻🇳 Cổng Tri Thức Số
             </span>
-            <span className="truncate text-rose-100 text-[11px] sm:text-xs">
+            <span className="truncate text-blue-100/90 text-[11px] sm:text-xs font-medium">
               Hệ sinh thái chia sẻ Slide PowerPoint, AI Prompts & Font chữ Việt hóa dùng chung
             </span>
           </div>
@@ -409,25 +482,25 @@ const App: React.FC = () => {
           <div className="flex items-center space-x-3 text-[11px] shrink-0">
             <button
               onClick={() => setIsPaletteOpen(true)}
-              className="hover:text-amber-300 transition-colors flex items-center space-x-1 cursor-pointer"
+              className="hover:text-cyan-300 transition-colors flex items-center space-x-1 cursor-pointer"
             >
-              <Palette className="w-3 h-3 text-amber-300" />
+              <Palette className="w-3 h-3 text-cyan-300" />
               <span className="hidden md:inline">Bảng màu Việt Nam</span>
             </button>
-            <span className="text-rose-300/40">•</span>
+            <span className="text-blue-300/30">•</span>
             <button
               onClick={() => setIsLegalOpen(true)}
-              className="hover:text-amber-300 transition-colors flex items-center space-x-1 cursor-pointer"
+              className="hover:text-cyan-300 transition-colors flex items-center space-x-1 cursor-pointer"
             >
-              <Scale className="w-3 h-3 text-amber-300" />
+              <Scale className="w-3 h-3 text-cyan-300" />
               <span className="hidden md:inline">Quy chuẩn Cờ & Biểu tượng</span>
             </button>
-            <span className="text-rose-300/40">•</span>
+            <span className="text-blue-300/30">•</span>
             <button
               onClick={() => setIsIdeaHubOpen(true)}
-              className="hover:text-amber-300 transition-colors flex items-center space-x-1 text-amber-200 font-bold cursor-pointer"
+              className="hover:text-cyan-200 transition-colors flex items-center space-x-1 text-cyan-300 font-bold cursor-pointer"
             >
-              <Lightbulb className="w-3 h-3 text-amber-300" />
+              <Lightbulb className="w-3 h-3 text-cyan-300" />
               <span>Gửi ý tưởng</span>
             </button>
           </div>
@@ -548,17 +621,34 @@ const App: React.FC = () => {
         />
 
         {/* Main Workspace Frame */}
-        <main className="container mx-auto px-4 py-6 sm:py-10 max-w-7xl space-y-6">
+        <main className="container mx-auto px-4 py-4 sm:py-6 max-w-7xl space-y-6 sm:space-y-8">
           
-          {/* Header Description */}
-          <header className="text-center mb-6 space-y-2.5 max-w-3xl mx-auto">
-            <h1 className="text-3xl md:text-4xl lg:text-5xl font-black tracking-tight text-slate-900 drop-shadow-xs leading-tight">
-              {systemConfig.siteName}
-            </h1>
-            <p className="text-sm sm:text-base text-slate-500 font-medium leading-relaxed">
-              {systemConfig.siteDescription}. Khám phá hàng ngàn mẫu slide PowerPoint, tài liệu chuyên ngành, bài viết kinh nghiệm và bộ câu lệnh AI cao cấp.
-            </p>
-          </header>
+          {/* MISA AMIS Enterprise Hero & 4-Step Interactive Workflow Pipeline */}
+          <MisaAmisHeroSection
+            onNavigateTab={(tab) => {
+              setActiveTab(tab);
+              // Smooth scroll to primary tab container
+              const elem = document.getElementById('primary-tab-switcher');
+              if (elem) {
+                elem.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              }
+            }}
+            onOpenIdeaHub={() => setIsIdeaHubOpen(true)}
+            onOpenPaletteModal={() => setIsPaletteOpen(true)}
+            onOpenLegalModal={() => {
+              setLegalTab('ip_policy');
+              setIsLegalOpen(true);
+            }}
+            onOpenSearch={() => setIsCommandSearchOpen(true)}
+            onOpenSlideGenerator={() => setIsSlideGeneratorOpen(true)}
+            onOpenCopilot={() => setIsCopilotOpen(true)}
+            onRequireAuth={handleRequireAuth}
+            currentUser={currentUser}
+            designFilesCount={designFiles.length}
+            promptsCount={aiPrompts.length}
+            fontsCount={fontsList.length}
+            articlesCount={articles.length}
+          />
 
           {/* Dynamic News Ticker Component (Di chuyển tin tức & bài viết mới) */}
           <NewsTicker 
@@ -567,11 +657,36 @@ const App: React.FC = () => {
             onNavigateArticlesTab={() => setActiveTab('articles')}
           />
 
-          {/* Primary View Tab Switcher */}
-          <div className="max-w-6xl mx-auto my-6" id="primary-tab-switcher">
+          {/* Professional Workflow & Productivity Quick Action Bar */}
+          <div className="max-w-6xl mx-auto">
+            <WorkflowActionBar
+              onOpenSlideGenerator={() => setIsSlideGeneratorOpen(true)}
+              onOpenCopilot={() => setIsCopilotOpen(true)}
+              onOpenPaletteModal={() => setIsPaletteOpen(true)}
+              onOpenSearch={() => setIsCommandSearchOpen(true)}
+              onOpenIdeaHub={() => setIsIdeaHubOpen(true)}
+              onOpenUpload={() => {
+                if (!currentUser) {
+                  handleRequireAuth('Vui lòng đăng nhập để đóng góp tệp thiết kế hoặc prompt!');
+                  return;
+                }
+                setIsDirectDesignEditorOpen(true);
+              }}
+              onNavigateTab={(tab) => {
+                setActiveTab(tab);
+                const elem = document.getElementById('primary-tab-switcher');
+                if (elem) elem.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              }}
+              currentUser={currentUser}
+              bookmarkedCount={bookmarkedCount}
+            />
+          </div>
+
+          {/* Primary View Tab Switcher with MISA AMIS Segmented SaaS Tabs */}
+          <div className="max-w-6xl mx-auto my-6 sm:my-8" id="primary-tab-switcher">
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
               {/* Tab Navigation Buttons with Framer Motion Icon Scaling and Smooth Sliding Pill */}
-              <div className="flex-1 bg-white p-1 rounded-xl border border-slate-200/80 shadow-sm flex overflow-x-auto no-scrollbar gap-0.5 scroll-smooth relative">
+              <div className="flex-1 bg-white p-1 rounded-2xl border border-slate-200/90 shadow-sm flex overflow-x-auto no-scrollbar gap-1 scroll-smooth relative">
                 {[
                   { id: 'designs', label: 'Thư viện Thiết kế', icon: FolderOpen },
                   { id: 'prompts', label: 'Kho AI Prompts', icon: Sparkles },
@@ -591,22 +706,22 @@ const App: React.FC = () => {
                       onClick={() => setActiveTab(tab.id as any)}
                       whileHover={{ scale: 1.02 }}
                       whileTap={{ scale: 0.96 }}
-                      className={`relative flex-1 flex items-center justify-center space-x-1.5 py-2 px-2.5 rounded-lg text-[11px] sm:text-xs font-bold transition-colors duration-200 whitespace-nowrap shrink-0 sm:shrink cursor-pointer select-none ${
+                      className={`relative flex-1 flex items-center justify-center space-x-1.5 py-2.5 px-3 rounded-xl text-[11px] sm:text-xs font-bold transition-colors duration-200 whitespace-nowrap shrink-0 sm:shrink cursor-pointer select-none ${
                         isActive
                           ? 'text-white'
                           : tab.isAdmin
                           ? 'text-purple-600 hover:text-purple-700 bg-purple-50/60 hover:bg-purple-100/70 border border-purple-200/50'
-                          : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
                       }`}
                     >
                       {/* Active Sliding Background Pill (Framer Motion layoutId) */}
                       {isActive && (
                         <motion.div
                           layoutId="activeTabBackgroundMain"
-                          className={`absolute inset-0 rounded-lg shadow-sm ${
+                          className={`absolute inset-0 rounded-xl shadow-md ${
                             tab.isAdmin
                               ? 'bg-purple-600 shadow-purple-500/25'
-                              : 'bg-blue-600 shadow-blue-500/20'
+                              : 'bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-600 shadow-blue-500/25'
                           }`}
                           transition={{ type: 'spring', stiffness: 400, damping: 32 }}
                         />
@@ -615,7 +730,7 @@ const App: React.FC = () => {
                       {/* Icon with smooth Framer Motion scale-up effect */}
                       <motion.span
                         animate={{
-                          scale: isActive ? 1.22 : 1,
+                          scale: isActive ? 1.15 : 1,
                           y: isActive ? -1 : 0,
                         }}
                         transition={{
@@ -662,10 +777,10 @@ const App: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setIsSpecialtyDropdownOpen(!isSpecialtyDropdownOpen)}
-                  className={`w-full sm:w-auto flex items-center justify-between sm:justify-center space-x-1.5 py-2 px-3 rounded-xl border text-[11px] sm:text-xs font-bold transition-all duration-200 shadow-sm active:scale-95 cursor-pointer ${
+                  className={`w-full sm:w-auto flex items-center justify-between sm:justify-center space-x-1.5 py-2.5 px-3.5 rounded-xl border text-[11px] sm:text-xs font-bold transition-all duration-200 shadow-sm active:scale-95 cursor-pointer ${
                     selectedSpecialty !== 'all'
                       ? 'bg-blue-50 text-blue-700 border-blue-300 ring-1 ring-blue-500/20'
-                      : 'bg-white text-slate-700 hover:text-slate-900 hover:bg-slate-50 border-slate-200/80'
+                      : 'bg-white text-slate-700 hover:text-slate-900 hover:bg-slate-50 border-slate-200/90'
                   }`}
                   id="specialty-dropdown-trigger"
                   aria-label="Lọc nhanh chuyên ngành"
@@ -880,61 +995,158 @@ const App: React.FC = () => {
             </AnimatePresence>
           </div>
 
-          {/* Site Footer */}
-          <footer className="mt-20 md:mt-24 pb-12 border-t border-slate-200 pt-10 space-y-6">
-            <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-              <div className="space-y-1 text-center md:text-left">
-                <div className="flex items-center justify-center md:justify-start space-x-2">
-                  <div className="w-6 h-6 bg-gradient-to-tr from-blue-600 to-indigo-600 rounded-lg flex items-center justify-center text-white font-black text-xs">
+          {/* Site Footer - MISA AMIS Enterprise SaaS Architecture */}
+          <footer className="mt-16 md:mt-24 pb-12 border-t border-slate-200/90 pt-12 space-y-10">
+            {/* Top Multi-column Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-8 lg:gap-12 text-slate-600">
+              {/* Col 1: Brand & Identity */}
+              <div className="space-y-3 md:col-span-1">
+                <div className="flex items-center space-x-2.5">
+                  <div className="w-8 h-8 bg-gradient-to-tr from-blue-600 via-blue-700 to-indigo-700 rounded-xl flex items-center justify-center text-white font-black text-xs shadow-md shadow-blue-500/20">
                     IC
                   </div>
-                  <span className="font-extrabold text-slate-900 text-sm tracking-tight">{systemConfig.siteName}</span>
+                  <div>
+                    <span className="font-black text-slate-900 text-base tracking-tight block">
+                      {systemConfig.siteName}
+                    </span>
+                    <span className="text-[9px] font-extrabold text-blue-600 uppercase tracking-widest block -mt-0.5">
+                      Enterprise Knowledge
+                    </span>
+                  </div>
                 </div>
-                <p className="text-slate-500 text-xs font-medium max-w-md">
-                  Nền tảng chia sẻ tài nguyên thiết kế, AI prompts và nghiên cứu học tập phi lợi nhuận cho sinh viên và cán bộ Đoàn - Hội Việt Nam.
+                <p className="text-slate-500 text-xs font-medium leading-relaxed">
+                  Hệ thống chia sẻ tri thức số, mẫu Slide PowerPoint, AI Prompts & Font chữ Việt hóa đạt chuẩn dành cho sinh viên và cán bộ Đoàn - Hội Việt Nam.
                 </p>
+                <div className="pt-2 flex items-center space-x-2">
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/60">
+                    <ShieldCheck className="w-3 h-3 mr-1 text-emerald-600" />
+                    Bảo mật chuẩn ISO
+                  </span>
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200/60">
+                    CC BY-NC-SA 4.0
+                  </span>
+                </div>
               </div>
 
-              {/* Compliance & Standards Links */}
-              <div className="flex flex-wrap items-center justify-center gap-3 text-xs font-bold text-slate-600">
-                <button
-                  onClick={() => setIsPaletteOpen(true)}
-                  className="px-3 py-1.5 bg-slate-100 hover:bg-blue-50 hover:text-blue-600 rounded-xl transition-colors flex items-center space-x-1.5"
-                >
-                  <Palette className="w-3.5 h-3.5 text-amber-500" />
-                  <span>Bảng màu & Tỷ lệ chuẩn VN</span>
-                </button>
-                <button
-                  onClick={() => { setLegalTab('ip_policy'); setIsLegalOpen(true); }}
-                  className="px-3 py-1.5 bg-slate-100 hover:bg-blue-50 hover:text-blue-600 rounded-xl transition-colors flex items-center space-x-1.5"
-                >
-                  <Scale className="w-3.5 h-3.5 text-blue-600" />
-                  <span>Bản quyền SHTT</span>
-                </button>
-                <button
-                  onClick={() => { setLegalTab('community_rules'); setIsLegalOpen(true); }}
-                  className="px-3 py-1.5 bg-slate-100 hover:bg-blue-50 hover:text-blue-600 rounded-xl transition-colors flex items-center space-x-1.5"
-                >
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Chuẩn mực cộng đồng</span>
-                </button>
-                <button
-                  onClick={() => { setLegalTab('ai_ethics'); setIsLegalOpen(true); }}
-                  className="px-3 py-1.5 bg-slate-100 hover:bg-blue-50 hover:text-blue-600 rounded-xl transition-colors flex items-center space-x-1.5"
-                >
-                  <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
-                  <span>Đạo đức AI</span>
-                </button>
+              {/* Col 2: Hệ sinh thái tài nguyên */}
+              <div className="space-y-3">
+                <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">Hệ sinh thái Tri thức</h4>
+                <ul className="space-y-2 text-xs font-semibold text-slate-600">
+                  <li>
+                    <button 
+                      onClick={() => setActiveTab('designs')}
+                      className="hover:text-blue-600 transition-colors flex items-center space-x-1.5"
+                    >
+                      <FolderOpen className="w-3.5 h-3.5 text-blue-500" />
+                      <span>Kho Slide & Vector ({designFiles.length})</span>
+                    </button>
+                  </li>
+                  <li>
+                    <button 
+                      onClick={() => setActiveTab('prompts')}
+                      className="hover:text-blue-600 transition-colors flex items-center space-x-1.5"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
+                      <span>AI Prompts chuẩn hóa ({aiPrompts.length})</span>
+                    </button>
+                  </li>
+                  <li>
+                    <button 
+                      onClick={() => setActiveTab('fonts')}
+                      className="hover:text-blue-600 transition-colors flex items-center space-x-1.5"
+                    >
+                      <Type className="w-3.5 h-3.5 text-teal-500" />
+                      <span>Font chữ Việt hóa ({fontsList.length})</span>
+                    </button>
+                  </li>
+                  <li>
+                    <button 
+                      onClick={() => setActiveTab('articles')}
+                      className="hover:text-blue-600 transition-colors flex items-center space-x-1.5"
+                    >
+                      <BookOpen className="w-3.5 h-3.5 text-amber-500" />
+                      <span>Bài viết & Nghiên cứu ({articles.length})</span>
+                    </button>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Col 3: Quy chuẩn & Pháp lý */}
+              <div className="space-y-3">
+                <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">Quy chuẩn & Pháp lý</h4>
+                <ul className="space-y-2 text-xs font-semibold text-slate-600">
+                  <li>
+                    <button
+                      onClick={() => setIsPaletteOpen(true)}
+                      className="hover:text-blue-600 transition-colors flex items-center space-x-1.5"
+                    >
+                      <Palette className="w-3.5 h-3.5 text-rose-500" />
+                      <span>Bảng màu & Tỷ lệ chuẩn VN</span>
+                    </button>
+                  </li>
+                  <li>
+                    <button
+                      onClick={() => { setLegalTab('ip_policy'); setIsLegalOpen(true); }}
+                      className="hover:text-blue-600 transition-colors flex items-center space-x-1.5"
+                    >
+                      <Scale className="w-3.5 h-3.5 text-blue-600" />
+                      <span>Bản quyền & Sở hữu trí tuệ</span>
+                    </button>
+                  </li>
+                  <li>
+                    <button
+                      onClick={() => { setLegalTab('community_rules'); setIsLegalOpen(true); }}
+                      className="hover:text-blue-600 transition-colors flex items-center space-x-1.5"
+                    >
+                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Chuẩn mực đóng góp</span>
+                    </button>
+                  </li>
+                  <li>
+                    <button
+                      onClick={() => { setLegalTab('ai_ethics'); setIsLegalOpen(true); }}
+                      className="hover:text-blue-600 transition-colors flex items-center space-x-1.5"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-purple-500" />
+                      <span>Đạo đức AI & Trích nguồn</span>
+                    </button>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Col 4: Cộng đồng & Đóng góp */}
+              <div className="space-y-3">
+                <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">Kênh kết nối & Đóng góp</h4>
+                <div className="space-y-2 text-xs font-semibold">
+                  <a
+                    href="https://zalo.me/g/kovwak924"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center space-x-2 px-3 py-2 bg-blue-50/80 hover:bg-blue-100 text-blue-700 rounded-xl transition-colors"
+                  >
+                    <MessageCircle className="w-4 h-4 text-blue-600" />
+                    <span>Zalo ICTC Community</span>
+                  </a>
+                  <button
+                    onClick={() => setIsIdeaHubOpen(true)}
+                    className="w-full flex items-center justify-between px-3 py-2 bg-amber-50/80 hover:bg-amber-100 text-amber-800 rounded-xl transition-colors text-left cursor-pointer"
+                  >
+                    <span className="flex items-center space-x-2">
+                      <Lightbulb className="w-4 h-4 text-amber-600" />
+                      <span>Gửi đề xuất ý tưởng</span>
+                    </span>
+                    <ArrowRight className="w-3.5 h-3.5 text-amber-600" />
+                  </button>
+                </div>
               </div>
             </div>
 
-            <div className="flex flex-col sm:flex-row items-center justify-between border-t border-slate-100 pt-6 text-xs text-slate-400 gap-4">
+            {/* Bottom Disclaimer Bar */}
+            <div className="flex flex-col sm:flex-row items-center justify-between border-t border-slate-200/80 pt-6 text-xs text-slate-400 gap-4">
               <p className="font-semibold text-center sm:text-left">
-                &copy; {new Date().getFullYear()} {systemConfig.siteName}. Giấy phép nội dung CC BY-NC-SA 4.0.
+                &copy; {new Date().getFullYear()} {systemConfig.siteName}. Phát triển theo phong cách Enterprise SaaS hiện đại.
               </p>
-              <div className="flex items-center space-x-5 font-bold">
-                <a href="https://zalo.me/g/kovwak924" target="_blank" rel="noopener noreferrer" className="hover:text-blue-600 transition-colors">Zalo Cộng đồng</a>
-                <span>•</span>
+              <div className="flex items-center space-x-4 font-bold">
                 <a href="https://www.facebook.com/groups/313739042955897" target="_blank" rel="noopener noreferrer" className="hover:text-blue-600 transition-colors">Group Facebook</a>
                 <span>•</span>
                 <a href="https://www.tiktok.com/@huy.ng.m" target="_blank" rel="noopener noreferrer" className="hover:text-blue-600 transition-colors">TikTok Creator</a>
@@ -950,6 +1162,42 @@ const App: React.FC = () => {
           </footer>
         </main>
       </div>
+
+      {/* MISA AMIS Floating Assistant & Fast Action Widget */}
+      <MisaAmisFloatingWidget
+        onOpenSearch={() => setIsCommandSearchOpen(true)}
+        onOpenIdeaHub={() => setIsIdeaHubOpen(true)}
+        onOpenPaletteModal={() => setIsPaletteOpen(true)}
+        onOpenLegalModal={() => {
+          setLegalTab('ip_policy');
+          setIsLegalOpen(true);
+        }}
+        onOpenSlideGenerator={() => setIsSlideGeneratorOpen(true)}
+        onOpenCopilot={() => setIsCopilotOpen(true)}
+      />
+
+      {/* AI Slide Generator Modal Studio */}
+      <AISlideGeneratorModal
+        isOpen={isSlideGeneratorOpen}
+        onClose={() => setIsSlideGeneratorOpen(false)}
+        onNavigateToDesign={() => setActiveTab('designs')}
+        onNavigateToPrompt={() => setActiveTab('prompts')}
+        onShowToast={(msg) => toastSuccess(msg)}
+      />
+
+      {/* ICTC Academic Copilot Modal */}
+      <AcademicCopilotModal
+        isOpen={isCopilotOpen}
+        onClose={() => setIsCopilotOpen(false)}
+        onNavigateTab={(tab) => setActiveTab(tab)}
+        onOpenSlideGenerator={() => setIsSlideGeneratorOpen(true)}
+        onOpenPaletteModal={() => setIsPaletteOpen(true)}
+        onOpenLegalModal={() => {
+          setLegalTab('ip_policy');
+          setIsLegalOpen(true);
+        }}
+        onShowToast={(msg) => toastSuccess(msg)}
+      />
 
       {/* Article Reader Modal */}
       {selectedArticleForReading && (

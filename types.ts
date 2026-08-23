@@ -46,6 +46,15 @@ export interface ContentReport {
   actionTaken?: string;
 }
 
+export interface ReviewComment {
+  id: string;
+  author: string;
+  authorRole?: string;
+  text: string;
+  createdAt: string;
+  isStaff?: boolean;
+}
+
 export interface DesignFile {
   id: string;
   title: string;
@@ -70,6 +79,7 @@ export interface DesignFile {
   autoFlaggedViolation?: boolean;
   violationReason?: string;
   isVip?: boolean;
+  comments?: ReviewComment[];
 }
 
 export interface AIPrompt {
@@ -91,6 +101,7 @@ export interface AIPrompt {
   violationReason?: string;
   isVip?: boolean;
   driveUrl?: string;
+  comments?: ReviewComment[];
 }
 
 export interface Article {
@@ -116,6 +127,7 @@ export interface Article {
   rejectionReason?: string;
   autoFlaggedViolation?: boolean;
   violationReason?: string;
+  comments?: ReviewComment[];
 }
 
 export interface ArticleComment {

@@ -206,6 +206,285 @@ export function getAllContentReports(): ContentReport[] {
 
 export const fetchContentReports = getAllContentReports;
 
+// ==========================================
+// 1. NHẬT KÝ HỆ THỐNG & TRUY XUẤT (AUDIT LOGS)
+// ==========================================
+
+export interface AuditLogEntry {
+  id: string;
+  timestamp: string;
+  actorName: string;
+  actorRole: string;
+  actionType: 'APPROVE' | 'REJECT' | 'DELETE' | 'ROLE_CHANGE' | 'CONFIG_UPDATE' | 'VIP_GRANT' | 'BAN_USER' | 'SYSTEM_SCAN';
+  targetType: 'article' | 'design' | 'prompt' | 'user' | 'system' | 'font';
+  targetTitle: string;
+  details: string;
+}
+
+export function addAuditLog(log: Omit<AuditLogEntry, 'id' | 'timestamp'>): void {
+  try {
+    const newEntry: AuditLogEntry = {
+      ...log,
+      id: `log-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      timestamp: new Date().toLocaleString('vi-VN')
+    };
+    const saved = localStorage.getItem('ictc_audit_logs');
+    const logs: AuditLogEntry[] = saved ? JSON.parse(saved) : [];
+    const updated = [newEntry, ...logs].slice(0, 200); // Keep last 200 logs
+    localStorage.setItem('ictc_audit_logs', JSON.stringify(updated));
+  } catch (e) {
+    console.warn('Could not save audit log:', e);
+  }
+}
+
+export function getAuditLogs(): AuditLogEntry[] {
+  try {
+    const saved = localStorage.getItem('ictc_audit_logs');
+    if (saved) return JSON.parse(saved);
+    // Initial mock logs if empty
+    const initialLogs: AuditLogEntry[] = [
+      {
+        id: 'log-101',
+        timestamp: new Date().toLocaleString('vi-VN'),
+        actorName: 'Quản trị viên Hệ thống',
+        actorRole: 'Admin',
+        actionType: 'SYSTEM_SCAN',
+        targetType: 'system',
+        targetTitle: 'Kiểm tra toàn vẹn liên kết Drive',
+        details: 'Khởi chạy công cụ kiểm tra tự động liên kết tài nguyên trên toàn hệ thống'
+      },
+      {
+        id: 'log-100',
+        timestamp: new Date(Date.now() - 3600000).toLocaleString('vi-VN'),
+        actorName: 'Ban Biên tập ICTC',
+        actorRole: 'Admin',
+        actionType: 'APPROVE',
+        targetType: 'article',
+        targetTitle: 'Hướng dẫn ứng dụng AI trong Thiết kế slide',
+        details: 'Bài viết đạt chuẩn tiêu chuẩn chất lượng và đã xuất bản công khai'
+      }
+    ];
+    localStorage.setItem('ictc_audit_logs', JSON.stringify(initialLogs));
+    return initialLogs;
+  } catch (e) {
+    return [];
+  }
+}
+
+export function clearAuditLogs(): void {
+  try {
+    localStorage.removeItem('ictc_audit_logs');
+  } catch (e) {}
+}
+
+// ==========================================
+// 2. CÔNG CỤ QUÉT & KIỂM TRA LIÊN KẾT LIVE (LINK HEALTH CHECKER)
+// ==========================================
+
+export interface LinkHealthReport {
+  id: string;
+  targetId: string;
+  type: 'design' | 'prompt' | 'article' | 'font';
+  title: string;
+  url: string;
+  author: string;
+  isHealthy: boolean;
+  statusCode: 'OK' | 'MISSING_URL' | 'NEED_PERMISSION' | 'INVALID_FORMAT';
+  lastChecked: string;
+  suggestion: string;
+}
+
+export function scanResourceLinks(
+  designs: any[],
+  prompts: any[],
+  articles: any[],
+  fonts: any[]
+): LinkHealthReport[] {
+  const reports: LinkHealthReport[] = [];
+  const now = new Date().toLocaleString('vi-VN');
+
+  // Scan Designs
+  (designs || []).forEach(d => {
+    const url = d.driveUrl || '';
+    let isHealthy = true;
+    let statusCode: LinkHealthReport['statusCode'] = 'OK';
+    let suggestion = 'Liên kết Google Drive hợp lệ và hoạt động bình thường.';
+
+    if (!url.trim()) {
+      isHealthy = false;
+      statusCode = 'MISSING_URL';
+      suggestion = 'Thiếu liên kết Google Drive. Yêu cầu tác giả cập nhật lại.';
+    } else if (!url.includes('drive.google.com') && !url.includes('docs.google.com') && !url.startsWith('http')) {
+      isHealthy = false;
+      statusCode = 'INVALID_FORMAT';
+      suggestion = 'Định dạng đường dẫn không đúng chuẩn URL hoặc chưa bao gồm https://';
+    } else if (url.includes('usp=sharing') || url.includes('id=')) {
+      isHealthy = true;
+      statusCode = 'OK';
+      suggestion = 'Đã mở quyền chia sẻ công khai.';
+    }
+
+    reports.push({
+      id: `link-d-${d.id}`,
+      targetId: d.id,
+      type: 'design',
+      title: d.title || 'Mẫu thiết kế',
+      url: url || 'Chưa cung cấp',
+      author: d.author || 'Tác giả',
+      isHealthy,
+      statusCode,
+      lastChecked: now,
+      suggestion
+    });
+  });
+
+  // Scan Prompts
+  (prompts || []).forEach(p => {
+    const url = p.driveUrl || '';
+    let isHealthy = true;
+    let statusCode: LinkHealthReport['statusCode'] = 'OK';
+    let suggestion = 'Liên kết đính kèm hợp lệ.';
+
+    if (url && !url.startsWith('http')) {
+      isHealthy = false;
+      statusCode = 'INVALID_FORMAT';
+      suggestion = 'Liên kết đính kèm chưa khớp định dạng URL tiêu chuẩn.';
+    }
+
+    reports.push({
+      id: `link-p-${p.id}`,
+      targetId: p.id,
+      type: 'prompt',
+      title: p.title || 'Câu lệnh AI',
+      url: url || 'N/A (Chỉ có raw prompt)',
+      author: p.author || 'Tác giả',
+      isHealthy,
+      statusCode,
+      lastChecked: now,
+      suggestion
+    });
+  });
+
+  // Scan Fonts
+  (fonts || []).forEach(f => {
+    const url = f.downloadUrl || f.googleFontUrl || '';
+    let isHealthy = true;
+    let statusCode: LinkHealthReport['statusCode'] = 'OK';
+    let suggestion = 'Tệp font chữ tải về ổn định.';
+
+    if (!url.trim()) {
+      isHealthy = false;
+      statusCode = 'MISSING_URL';
+      suggestion = 'Thiếu liên kết tải phông chữ.';
+    }
+
+    reports.push({
+      id: `link-f-${f.id}`,
+      targetId: f.id,
+      type: 'font',
+      title: f.name || 'Phông chữ',
+      url,
+      author: f.creator || 'Cộng đồng',
+      isHealthy,
+      statusCode,
+      lastChecked: now,
+      suggestion
+    });
+  });
+
+  return reports;
+}
+
+// ==========================================
+// 3. ĐÁNH GIÁ ĐIỂM CHẤT LƯỢNG NỘI DUNG (QUALITY SCORE CALCULATOR)
+// ==========================================
+
+export interface ContentQualityResult {
+  score: number; // 0 to 100
+  badge: 'Tối ưu (A+)' | 'Khá tốt (B)' | 'Cần hoàn thiện (C)';
+  color: string;
+  checklist: Array<{ check: string; passed: boolean }>;
+}
+
+export function calculateQualityScore(item: any, type: 'design' | 'prompt' | 'article'): ContentQualityResult {
+  let score = 0;
+  const checklist: Array<{ check: string; passed: boolean }> = [];
+
+  if (type === 'design') {
+    // 1. Tiêu đề rõ ràng (> 10 ký tự)
+    const passTitle = (item.title || '').length >= 10;
+    checklist.push({ check: 'Tiêu đề đầy đủ & chuẩn SEO (>=10 ký tự)', passed: passTitle });
+    if (passTitle) score += 25;
+
+    // 2. Mô tả chi tiết (> 20 ký tự)
+    const passDesc = (item.description || '').length >= 20;
+    checklist.push({ check: 'Mô tả chi tiết cách sử dụng (>=20 ký tự)', passed: passDesc });
+    if (passDesc) score += 25;
+
+    // 3. Đủ thẻ tags
+    const passTags = Array.isArray(item.tags) && item.tags.length >= 2;
+    checklist.push({ check: 'Gắn ít nhất 2 thẻ phân loại (Tags)', passed: passTags });
+    if (passTags) score += 20;
+
+    // 4. Liên kết Drive hợp lệ
+    const passDrive = !!(item.driveUrl && item.driveUrl.startsWith('http'));
+    checklist.push({ check: 'Đường dẫn Google Drive hoạt động', passed: passDrive });
+    if (passDrive) score += 20;
+
+    // 5. Ảnh xem trước rõ nét
+    const passImg = !!(item.previewUrl || item.fallbackPreviewUrl);
+    checklist.push({ check: 'Có hình ảnh xem trước (Preview)', passed: passImg });
+    if (passImg) score += 10;
+  } else if (type === 'article') {
+    const passTitle = (item.title || '').length >= 12;
+    checklist.push({ check: 'Tiêu đề chuẩn bài báo (>=12 ký tự)', passed: passTitle });
+    if (passTitle) score += 25;
+
+    const passContent = (item.content || '').length >= 100;
+    checklist.push({ check: 'Nội dung phong phú (>=100 từ)', passed: passContent });
+    if (passContent) score += 35;
+
+    const passCover = !!item.coverImage;
+    checklist.push({ check: 'Hình ảnh đại diện (Cover) chất lượng', passed: passCover });
+    if (passCover) score += 20;
+
+    const passTags = Array.isArray(item.tags) && item.tags.length >= 2;
+    checklist.push({ check: 'Có thẻ tag tìm kiếm', passed: passTags });
+    if (passTags) score += 20;
+  } else {
+    // Prompt
+    const passTitle = (item.title || '').length >= 8;
+    checklist.push({ check: 'Tên câu lệnh rõ ràng', passed: passTitle });
+    if (passTitle) score += 25;
+
+    const passRaw = (item.rawPrompt || '').length >= 20;
+    checklist.push({ check: 'Câu lệnh gốc (Raw Prompt) chi tiết', passed: passRaw });
+    if (passRaw) score += 35;
+
+    const passOpt = (item.optimizedPrompt || '').length >= 20;
+    checklist.push({ check: 'Đã tối ưu hóa Prompt', passed: passOpt });
+    if (passOpt) score += 20;
+
+    const passPreview = !!item.previewImageUrl;
+    checklist.push({ check: 'Có ảnh minh họa minh chứng kết quả', passed: passPreview });
+    if (passPreview) score += 20;
+  }
+
+  let badge: ContentQualityResult['badge'] = 'Cần hoàn thiện (C)';
+  let color = 'text-amber-600 bg-amber-50 border-amber-200';
+
+  if (score >= 85) {
+    badge = 'Tối ưu (A+)';
+    color = 'text-emerald-600 bg-emerald-50 border-emerald-200';
+  } else if (score >= 60) {
+    badge = 'Khá tốt (B)';
+    color = 'text-blue-600 bg-blue-50 border-blue-200';
+  }
+
+  return { score, badge, color, checklist };
+}
+
+
 /**
  * Cập nhật trạng thái xử lý báo cáo vi phạm
  */

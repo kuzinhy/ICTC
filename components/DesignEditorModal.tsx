@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { 
   X, Save, UploadCloud, Link as LinkIcon, FileText, Info,
-  Sparkles, Check, AlertCircle, ShieldAlert, Crown, Upload, HardDrive, FolderPlus, ExternalLink, Loader2
+  Sparkles, Check, AlertCircle, ShieldAlert, Crown, Upload, HardDrive, FolderPlus, ExternalLink, Loader2, RefreshCw, Image as ImageIcon
 } from 'lucide-react';
 import { DesignFile, User } from '../types';
 import { scanContentSafety } from '../lib/contentModeration';
 import { uploadFileToGoogleDrive, getActiveAppsScriptUrl } from '../lib/appsScriptUploader';
 import { DRIVE_PPT_FOLDER, DRIVE_DESIGN_FOLDER, DRIVE_PROMPT_FOLDER } from '../data/constants';
+import { normalizeImageUrl, getProxyImageUrl } from '../lib/imageUtils';
 
 export const PRESET_FILE_ICONS = [
   {
@@ -285,8 +286,8 @@ export const DesignEditorModal: React.FC<DesignEditorModalProps> = ({
   const targetFolderUrl = isPptFormat ? DRIVE_PPT_FOLDER : DRIVE_DESIGN_FOLDER;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-fade-in">
-      <div className="bg-white border border-slate-100 rounded-3xl w-full max-w-xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto bg-slate-950/70 backdrop-blur-md animate-fade-in">
+      <div className="bg-white border border-slate-100 rounded-3xl w-full max-w-xl my-auto overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
         {/* Header */}
         <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50">
           <div className="flex items-center space-x-2">
@@ -551,35 +552,78 @@ export const DesignEditorModal: React.FC<DesignEditorModalProps> = ({
 
               {/* Input for direct custom URL */}
               <div className="space-y-1">
-                <span className="text-[10px] font-bold text-slate-500 block uppercase">
-                  2. HOẶC điền link ảnh đại diện tùy chỉnh (Image URL):
-                </span>
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold text-slate-500 block uppercase">
+                    2. HOẶC điền link ảnh đại diện tùy chỉnh (Image URL):
+                  </span>
+                  {previewUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setPreviewUrl(normalizeImageUrl(previewUrl))}
+                      className="text-[10px] text-blue-600 hover:text-blue-800 font-bold underline"
+                      title="Chuẩn hóa đường dẫn Google Drive / Direct URL"
+                    >
+                      Tự động tối ưu link
+                    </button>
+                  )}
+                </div>
                 <input
                   type="url"
                   required
                   value={previewUrl}
-                  onChange={(e) => setPreviewUrl(e.target.value)}
-                  placeholder="https://images.unsplash.com/photo-... hoặc https://drive.google.com/..."
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setPreviewUrl(normalizeImageUrl(val));
+                  }}
+                  placeholder="https://images.unsplash.com/photo-... hoặc https://sv2.anhsieuviet.com/..."
                   className="w-full bg-white border border-slate-200 rounded-xl p-3 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
 
               {previewUrl && (
-                <div className="pt-1">
-                  <p className="text-[10px] text-slate-500 font-bold mb-1">Xem trước ảnh đại diện hiện tại:</p>
-                  <div className="relative group rounded-xl overflow-hidden border border-slate-200 shadow-2xs">
+                <div className="pt-1 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[10px] text-slate-500 font-bold flex items-center space-x-1">
+                      <ImageIcon className="w-3 h-3 text-blue-600" />
+                      <span>Xem trước ảnh đại diện trực tiếp:</span>
+                    </p>
+                    <a
+                      href={previewUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[10px] text-slate-400 hover:text-blue-600 font-medium flex items-center space-x-0.5"
+                    >
+                      <span>Mở link gốc</span>
+                      <ExternalLink className="w-2.5 h-2.5" />
+                    </a>
+                  </div>
+                  
+                  <div className="relative group rounded-2xl overflow-hidden border border-slate-200 bg-slate-900/5 min-h-[120px] flex items-center justify-center shadow-2xs">
                     <img
                       src={previewUrl}
                       alt="Preview cover"
-                      className="w-full h-32 object-cover"
+                      className="w-full h-36 object-cover"
+                      referrerPolicy="no-referrer"
+                      loading="eager"
                       onError={(e) => {
-                        (e.target as any).src = 'https://images.unsplash.com/photo-1542744094-3a31f103e35f?auto=format&fit=crop&w=800&q=80';
+                        const img = e.currentTarget;
+                        const proxy = getProxyImageUrl(previewUrl);
+                        if (img.src !== proxy && !previewUrl.includes('images.weserv.nl')) {
+                          img.src = proxy;
+                        }
                       }}
                     />
-                    <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                      <span className="text-white text-xs font-bold px-3 py-1 bg-slate-900/80 rounded-lg">
-                        Đang sử dụng ảnh đại diện này
+                    <div className="absolute inset-0 bg-slate-900/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center p-3 gap-2">
+                      <span className="text-white text-xs font-bold px-3 py-1 bg-slate-900/80 rounded-lg backdrop-blur-md">
+                        Ảnh xem trước hợp lệ (No-Referrer Bypassed)
                       </span>
+                      <button
+                        type="button"
+                        onClick={() => setPreviewUrl(getProxyImageUrl(previewUrl))}
+                        className="text-[10px] font-bold text-amber-300 bg-amber-950/80 hover:bg-amber-900 px-2.5 py-1 rounded-lg border border-amber-500/40 transition-colors"
+                      >
+                        ⚡ Chuyển qua máy chủ đệm Web Proxy nếu bị chặn
+                      </button>
                     </div>
                   </div>
                 </div>

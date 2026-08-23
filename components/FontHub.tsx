@@ -152,50 +152,33 @@ export const FontHub: React.FC<FontHubProps> = ({
   const driveFontFolderUrl = systemConfig?.driveFontFolder || systemConfig?.sharedUploadDriveUrl || DRIVE_DESIGN_FOLDER;
 
   return (
-    <div className="space-y-8 animate-fade-in" id="font-hub-root">
+    <div className="space-y-4 animate-fade-in" id="font-hub-root">
       
-      {/* Header Banner - Kho Font Việt Hóa Chuẩn & Google Fonts */}
-      <div className="bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 rounded-3xl p-6 sm:p-10 text-white shadow-xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 -mt-10 -mr-10 w-96 h-96 bg-blue-500/20 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute bottom-0 left-1/3 -mb-10 w-72 h-72 bg-cyan-400/15 rounded-full blur-2xl pointer-events-none" />
+      {/* Header Banner - Streamlined Compact */}
+      <div className="bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 rounded-2xl p-4 sm:p-6 text-white shadow-md relative overflow-hidden">
+        <div className="absolute top-0 right-0 -mt-10 -mr-10 w-80 h-80 bg-blue-500/20 rounded-full blur-3xl pointer-events-none" />
 
-        <div className="relative z-10 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
-          <div className="space-y-3 max-w-3xl">
-            <div className="inline-flex items-center space-x-2 px-3 py-1 bg-white/15 backdrop-blur-md rounded-full text-xs font-black uppercase tracking-wider text-cyan-300 border border-white/20">
-              <Type className="w-3.5 h-3.5" />
-              <span>Typography Tiếng Việt • Hệ Sinh Thái Google Fonts Đầy Đủ Dấu Chuẩn</span>
+        <div className="relative z-10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div className="space-y-2 max-w-2xl">
+            <div className="inline-flex items-center space-x-1.5 px-2.5 py-0.5 bg-white/15 backdrop-blur-md rounded-full text-[10px] font-black uppercase tracking-wider text-cyan-300 border border-white/20">
+              <Type className="w-3 h-3" />
+              <span>Typography Tiếng Việt • Google Fonts & Open Source</span>
             </div>
-            <h1 className="text-2xl sm:text-4xl font-black tracking-tight leading-tight">
-              Thư Viện Font Chữ Việt Hóa & Tài Nguyên Mở Google
+            <h1 className="text-xl sm:text-2xl font-black tracking-tight leading-tight">
+              Thư Viện Font Chữ Việt Hóa & Google Fonts
             </h1>
-            <p className="text-slate-200 text-sm sm:text-base leading-relaxed font-medium">
-              Tuyển tập trọn bộ các dòng font chữ Việt hóa chuẩn mực từ Google Fonts, UTM, SVN, UVN dành cho thiết kế phông sân khấu hội nghị, băng rôn khẩu hiệu, văn bản hành chính quy phạm, thiệp mời vinh danh và slide thuyết trình chuyên nghiệp.
+            <p className="text-slate-200 text-xs sm:text-sm leading-relaxed font-medium line-clamp-2">
+              Tuyển tập trọn bộ font chữ Việt hóa chuẩn mực cho thiết kế phông sân khấu hội nghị, băng rôn, thiệp mời vinh danh và slide thuyết trình.
             </p>
-
-            {/* Quick Metrics */}
-            <div className="flex flex-wrap items-center gap-3 pt-2 text-xs font-bold text-slate-200">
-              <div className="flex items-center space-x-1.5 bg-black/25 px-3 py-1.5 rounded-xl backdrop-blur-xs border border-white/10">
-                <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                <span>100% Khắc phục lỗi gõ dấu tiếng Việt</span>
-              </div>
-              <div className="flex items-center space-x-1.5 bg-black/25 px-3 py-1.5 rounded-xl backdrop-blur-xs border border-white/10">
-                <Sparkles className="w-4 h-4 text-amber-300" />
-                <span>Toàn bộ Font Việt Hóa Google & Open Source</span>
-              </div>
-              <div className="flex items-center space-x-1.5 bg-black/25 px-3 py-1.5 rounded-xl backdrop-blur-xs border border-white/10">
-                <HardDrive className="w-4 h-4 text-cyan-300" />
-                <span>Lưu trữ đồng bộ Google Drive</span>
-              </div>
-            </div>
           </div>
           
-          <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto shrink-0 z-10">
+          <div className="flex flex-wrap items-center gap-2 w-full md:w-auto shrink-0">
             <button
               onClick={() => setIsCompareModalOpen(true)}
-              className="flex items-center justify-center px-4 py-3.5 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-sm rounded-2xl transition-all duration-200 shadow-md shadow-amber-500/20 active:scale-95 border border-amber-300 cursor-pointer"
+              className="flex items-center justify-center px-3.5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs rounded-xl transition-all shadow-sm active:scale-95 border border-amber-300 cursor-pointer"
             >
-              <Type className="w-4 h-4 mr-2 text-slate-950" />
-              So sánh Font Side-by-Side
+              <Type className="w-3.5 h-3.5 mr-1.5 text-slate-950" />
+              So sánh Side-by-Side
             </button>
 
             <button
@@ -206,63 +189,63 @@ export const FontHub: React.FC<FontHubProps> = ({
                 }
                 setIsUploadModalOpen(true);
               }}
-              className="flex items-center justify-center px-5 py-3.5 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-sm rounded-2xl transition-all duration-200 shadow-lg shadow-emerald-600/30 active:scale-95 border border-emerald-400/30"
+              className="flex items-center justify-center px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs rounded-xl transition-all shadow-sm active:scale-95 border border-emerald-400/30 cursor-pointer"
             >
-              <Plus className="w-4 h-4 mr-2 stroke-[3]" />
+              <Plus className="w-3.5 h-3.5 mr-1 stroke-[3]" />
               Thêm Font Mới
             </button>
 
             <button
               onClick={() => setIsGuideOpen(!isGuideOpen)}
-              className="flex items-center justify-center px-5 py-3.5 bg-white/10 hover:bg-white/20 text-white border border-white/25 font-bold text-sm rounded-2xl transition-all duration-200 backdrop-blur-md shadow-sm"
+              className="flex items-center justify-center px-3 py-2 bg-white/10 hover:bg-white/20 text-white border border-white/25 font-bold text-xs rounded-xl transition-all cursor-pointer"
             >
-              <HelpCircle className="w-4 h-4 mr-2 text-cyan-300" />
-              Hướng dẫn cài đặt
+              <HelpCircle className="w-3.5 h-3.5 mr-1 text-cyan-300" />
+              Hướng dẫn
             </button>
 
             <a
               href={driveFontFolderUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center justify-center px-6 py-3.5 bg-blue-500 hover:bg-blue-400 text-white font-extrabold text-sm rounded-2xl transition-all duration-200 shadow-lg shadow-blue-500/20 active:scale-95"
+              className="flex items-center justify-center px-3.5 py-2 bg-blue-500 hover:bg-blue-400 text-white font-extrabold text-xs rounded-xl transition-all shadow-sm active:scale-95"
             >
-              <Download className="w-4 h-4 mr-2 text-white" />
-              Thư mục Font Drive (.ZIP)
+              <Download className="w-3.5 h-3.5 mr-1 text-white" />
+              Drive (.ZIP)
             </a>
           </div>
         </div>
       </div>
 
-      {/* Main Switcher: Kho Font Chữ vs Hệ Sinh Thái Tài Nguyên Mở Google */}
-      <div className="flex items-center justify-between border-b border-slate-200/80 pb-3">
+      {/* Main Switcher */}
+      <div className="flex items-center justify-between border-b border-slate-200/80 pb-2.5">
         <div className="flex items-center space-x-2">
           <button
             onClick={() => setActiveTab('fonts')}
-            className={`flex items-center space-x-2 px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider transition-all ${
+            className={`flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
               activeTab === 'fonts'
-                ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
+                ? 'bg-blue-600 text-white shadow-xs'
                 : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
             }`}
           >
-            <Type className="w-4 h-4" />
-            <span>Thư Viện Font Chữ Việt Hóa ({fontsList.length})</span>
+            <Type className="w-3.5 h-3.5" />
+            <span>Font Việt Hóa ({fontsList.length})</span>
           </button>
 
           <button
             onClick={() => setActiveTab('google-resources')}
-            className={`flex items-center space-x-2 px-5 py-2.5 rounded-2xl text-xs font-black uppercase tracking-wider transition-all ${
+            className={`flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
               activeTab === 'google-resources'
-                ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
+                ? 'bg-blue-600 text-white shadow-xs'
                 : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
             }`}
           >
-            <Sparkles className="w-4 h-4 text-amber-500" />
-            <span>Nguồn Tài Nguyên Mở Google ({GOOGLE_RESOURCES_DATA.length})</span>
+            <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+            <span>Tài Nguyên Google ({GOOGLE_RESOURCES_DATA.length})</span>
           </button>
         </div>
 
-        <div className="hidden sm:flex items-center space-x-2 text-xs font-bold text-slate-500">
-          <HardDrive className="w-4 h-4 text-blue-600" />
+        <div className="hidden sm:flex items-center space-x-1.5 text-xs font-bold text-slate-500">
+          <HardDrive className="w-3.5 h-3.5 text-blue-600" />
           <span>Thư mục Drive: <a href={driveFontFolderUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">ICTC_FONTS</a></span>
         </div>
       </div>
@@ -315,30 +298,26 @@ export const FontHub: React.FC<FontHubProps> = ({
 
       {/* TAB 1: FONTS TYPOGRAPHY HUB */}
       {activeTab === 'fonts' && (
-        <div className="space-y-8 animate-fade-in">
+        <div className="space-y-4 animate-fade-in">
           
           {/* INTERACTIVE TYPOGRAPHY TESTER CONTROL BAR */}
-          <div className="bg-white border border-slate-200/90 rounded-3xl p-6 shadow-sm space-y-5">
-            <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
+          <div className="bg-white border border-slate-200/90 rounded-2xl p-3 sm:p-4 shadow-xs space-y-3">
+            <div className="flex flex-col lg:flex-row gap-3 items-start lg:items-center justify-between">
               
               {/* Sample Text Input */}
-              <div className="flex-1 w-full space-y-1.5">
-                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center space-x-1.5">
-                  <Type className="w-3.5 h-3.5 text-blue-600" />
-                  <span>Thử nghiệm trực quan dấu tiếng Việt (Gõ câu bất kỳ):</span>
-                </label>
+              <div className="flex-1 w-full space-y-1">
                 <div className="relative">
                   <input
                     type="text"
                     value={sampleText}
                     onChange={(e) => setSampleText(e.target.value)}
                     placeholder="Nhập câu tiếng Việt bất kỳ để kiểm tra hiển thị dấu..."
-                    className="w-full bg-slate-50 hover:bg-slate-100/70 focus:bg-white text-slate-900 px-4 py-3 rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm font-semibold transition-all"
+                    className="w-full bg-slate-50 hover:bg-slate-100/80 focus:bg-white text-slate-900 pl-3.5 pr-10 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs font-semibold transition-all"
                   />
                   {sampleText && (
                     <button
                       onClick={() => setSampleText('')}
-                      className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400 hover:text-slate-600"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-bold text-slate-400 hover:text-slate-600 cursor-pointer"
                     >
                       Xóa
                     </button>
@@ -347,17 +326,12 @@ export const FontHub: React.FC<FontHubProps> = ({
               </div>
 
               {/* Tool Controls: Size, Weight, Dark/Light */}
-              <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
+              <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto shrink-0">
                 
                 {/* Font Size Slider */}
-                <div className="w-44 space-y-1 bg-slate-50 p-2.5 rounded-2xl border border-slate-200/80">
-                  <div className="flex items-center justify-between text-[11px] font-bold text-slate-600">
-                    <span className="flex items-center space-x-1">
-                      <Sliders className="w-3 h-3 text-blue-600" />
-                      <span>Cỡ chữ:</span>
-                    </span>
-                    <span className="font-mono text-blue-600">{fontSize}px</span>
-                  </div>
+                <div className="flex items-center space-x-2 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200/80">
+                  <Sliders className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                  <span className="text-[11px] font-bold text-slate-600 shrink-0">Cỡ:</span>
                   <input
                     type="range"
                     min="18"
@@ -365,17 +339,18 @@ export const FontHub: React.FC<FontHubProps> = ({
                     step="2"
                     value={fontSize}
                     onChange={(e) => setFontSize(Number(e.target.value))}
-                    className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                    className="w-20 h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
                   />
+                  <span className="font-mono text-xs font-bold text-blue-600 min-w-[28px] text-right">{fontSize}px</span>
                 </div>
 
                 {/* Font Weight Selector */}
-                <div className="space-y-1 bg-slate-50 p-2 rounded-2xl border border-slate-200/80">
-                  <label className="text-[10px] font-bold text-slate-500 uppercase block px-1">Độ Đậm</label>
+                <div className="flex items-center space-x-1.5 bg-slate-50 px-2.5 py-1.5 rounded-xl border border-slate-200/80">
+                  <span className="text-[11px] font-bold text-slate-600">Độ đậm:</span>
                   <select
                     value={fontWeight}
                     onChange={(e) => setFontWeight(e.target.value)}
-                    className="bg-white border border-slate-200 rounded-xl px-2 py-1 text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="bg-white border border-slate-200 rounded-lg px-2 py-0.5 text-xs font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
                   >
                     <option value="300">Light 300</option>
                     <option value="normal">Regular 400</option>
@@ -388,29 +363,29 @@ export const FontHub: React.FC<FontHubProps> = ({
                 {/* Dark/Light Specimen Invert Toggle */}
                 <button
                   onClick={() => setIsDarkPreview(!isDarkPreview)}
-                  className={`p-3 rounded-2xl border transition-all ${
+                  className={`p-2 rounded-xl border transition-all cursor-pointer ${
                     isDarkPreview 
-                      ? 'bg-slate-900 text-yellow-400 border-slate-800 shadow-sm' 
+                      ? 'bg-slate-900 text-yellow-400 border-slate-800 shadow-xs' 
                       : 'bg-slate-50 text-slate-600 hover:bg-slate-100 border-slate-200'
                   }`}
                   title="Đổi nền sáng/tối thử nghiệm font"
                 >
-                  {isDarkPreview ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                  {isDarkPreview ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
                 </button>
 
               </div>
             </div>
 
             {/* Quick Sample Presets */}
-            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pt-1 border-t border-slate-100">
-              <span className="text-[11px] font-bold text-slate-400 whitespace-nowrap pr-2">Gợi ý mẫu:</span>
+            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pt-0.5">
+              <span className="text-[10px] font-bold text-slate-400 whitespace-nowrap pr-1">Mẫu nhanh:</span>
               {SAMPLE_TEXT_PRESETS.map((preset, idx) => (
                 <button
                   key={idx}
                   onClick={() => setSampleText(preset)}
-                  className="px-2.5 py-1 bg-slate-100 hover:bg-blue-50 hover:text-blue-600 text-slate-600 rounded-lg text-[11px] font-medium whitespace-nowrap transition-colors border border-slate-200/60"
+                  className="px-2 py-0.5 bg-slate-100 hover:bg-blue-50 hover:text-blue-600 text-slate-600 rounded-lg text-[10px] font-medium whitespace-nowrap transition-colors border border-slate-200/60 cursor-pointer"
                 >
-                  {preset.length > 30 ? preset.slice(0, 30) + '...' : preset}
+                  {preset.length > 25 ? preset.slice(0, 25) + '...' : preset}
                 </button>
               ))}
             </div>
@@ -463,11 +438,11 @@ export const FontHub: React.FC<FontHubProps> = ({
           </div>
 
           {/* FONT CARDS LIST */}
-          <div className="space-y-6">
+          <div className="space-y-3">
             {filteredFonts.length === 0 ? (
-              <div className="text-center py-16 bg-white rounded-3xl border border-dashed border-slate-200 shadow-sm">
-                <Type className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-                <p className="text-slate-800 font-bold">Không tìm thấy font chữ nào phù hợp</p>
+              <div className="text-center py-12 bg-white rounded-2xl border border-dashed border-slate-200 shadow-xs">
+                <Type className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+                <p className="text-slate-800 font-bold text-sm">Không tìm thấy font chữ nào phù hợp</p>
                 <p className="text-slate-400 text-xs mt-1">Hãy thử tìm kiếm với từ khóa khác hoặc chọn danh mục khác.</p>
               </div>
             ) : (
@@ -477,16 +452,16 @@ export const FontHub: React.FC<FontHubProps> = ({
                 return (
                   <div
                     key={font.id}
-                    className={`border rounded-3xl shadow-sm hover:shadow-md transition-all overflow-hidden p-6 sm:p-8 space-y-6 relative ${
+                    className={`border rounded-2xl shadow-xs hover:shadow-md transition-all overflow-hidden p-4 sm:p-5 space-y-3.5 relative ${
                       font.isVip 
-                        ? 'border-transparent bg-gradient-to-b from-amber-50/40 via-white to-white ring-2 ring-amber-400/90 shadow-md shadow-amber-500/5 hover:shadow-xl hover:shadow-amber-500/10' 
+                        ? 'border-transparent bg-gradient-to-b from-amber-50/40 via-white to-white ring-2 ring-amber-400/90 shadow-md shadow-amber-500/5 hover:shadow-lg' 
                         : font.isPinned 
                           ? 'border-blue-300 bg-gradient-to-b from-blue-50/20 to-white ring-1 ring-blue-200/50' 
                           : 'border-slate-200/90 bg-white'
                     }`}
                   >
                     {/* Top Header Row */}
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-slate-100 pb-3">
                       <div className="space-y-1">
                         <div className="flex flex-wrap items-center gap-2">
                           {font.isVip && (
@@ -723,8 +698,8 @@ export const FontHub: React.FC<FontHubProps> = ({
 
       {/* CDN EMBED CODE MODAL */}
       {selectedFontForCdn && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fade-in">
-          <div className="bg-white text-slate-900 w-full max-w-2xl rounded-3xl shadow-2xl border border-slate-200 overflow-hidden p-6 space-y-5">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto bg-slate-950/80 backdrop-blur-md animate-fade-in">
+          <div className="bg-white text-slate-900 w-full max-w-2xl my-auto rounded-3xl shadow-2xl border border-slate-200 overflow-hidden p-6 space-y-5">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center space-x-2.5">
                 <Code className="w-5 h-5 text-blue-600" />

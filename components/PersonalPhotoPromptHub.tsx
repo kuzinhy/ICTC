@@ -654,8 +654,8 @@ export const PersonalPhotoPromptHub: React.FC<PersonalPhotoPromptHubProps> = ({
 
       {/* View Details Modal with Illustration */}
       {viewingPrompt && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-8 space-y-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto bg-slate-950/70 backdrop-blur-md animate-fade-in">
+          <div className="bg-white rounded-3xl max-w-2xl w-full my-auto p-6 sm:p-8 space-y-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
             <button
               onClick={() => setViewingPrompt(null)}
               className="absolute top-6 right-6 p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-full transition-colors z-10"
@@ -731,8 +731,8 @@ export const PersonalPhotoPromptHub: React.FC<PersonalPhotoPromptHubProps> = ({
 
       {/* Submit New Prompt Modal */}
       {isSubmitModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white rounded-3xl max-w-xl w-full p-6 sm:p-8 space-y-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto bg-slate-950/70 backdrop-blur-md animate-fade-in">
+          <div className="bg-white rounded-3xl max-w-xl w-full my-auto p-6 sm:p-8 space-y-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
             <button
               onClick={() => setIsSubmitModalOpen(false)}
               className="absolute top-6 right-6 p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-full transition-colors"

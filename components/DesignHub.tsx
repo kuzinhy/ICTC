@@ -3,7 +3,8 @@ import {
   Search, Download, Star, Tag, FileText, X, Edit, Trash2,
   UploadCloud, Check, ExternalLink, Calendar, User, Eye, Sparkles,
   Lock, Shield, ArrowRight, LogIn, Palette, Scale, ShieldCheck, Flag, AlertTriangle,
-  Crown, Clock, Bookmark, BookmarkCheck, Heart, Play
+  Crown, Clock, Bookmark, BookmarkCheck, Heart, Play,
+  ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Layers, SlidersHorizontal
 } from 'lucide-react';
 import { DesignFile, User as UserType } from '../types';
 import { VipUpgradeModal } from './VipUpgradeModal';
@@ -372,6 +373,29 @@ export const DesignHub: React.FC<DesignHubProps> = ({ currentUser, files, onFile
     });
   }, [files, searchTerm, selectedCategory, selectedSpecialty, currentUser]);
 
+  // Pagination & Load More States
+  const [displayMode, setDisplayMode] = useState<'loadMore' | 'pagination'>('loadMore');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(9);
+  const [visibleCount, setVisibleCount] = useState(9);
+
+  // Reset pagination state when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+    setVisibleCount(itemsPerPage);
+  }, [searchTerm, selectedCategory, selectedSpecialty, itemsPerPage]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredFiles.length / itemsPerPage));
+
+  const displayedFiles = useMemo(() => {
+    if (displayMode === 'loadMore') {
+      return filteredFiles.slice(0, visibleCount);
+    } else {
+      const start = (currentPage - 1) * itemsPerPage;
+      return filteredFiles.slice(start, start + itemsPerPage);
+    }
+  }, [filteredFiles, displayMode, visibleCount, currentPage, itemsPerPage]);
+
   return (
     <div className="space-y-8" id="design-hub-root">
       {/* Blue and White Header Drive Panel */}
@@ -483,7 +507,7 @@ export const DesignHub: React.FC<DesignHubProps> = ({ currentUser, files, onFile
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredFiles.map((file) => {
+          {displayedFiles.map((file) => {
             const isOwner = currentUser && (currentUser.id === file.authorId || currentUser.role === 'Admin');
             
             return (
@@ -632,10 +656,170 @@ export const DesignHub: React.FC<DesignHubProps> = ({ currentUser, files, onFile
         </div>
       )}
 
+      {/* Pagination & Load More Control Bar */}
+      {filteredFiles.length > 0 && (
+        <div className="bg-white rounded-3xl border border-slate-200/80 p-5 sm:p-6 shadow-xs space-y-4">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            
+            {/* Info & Progress */}
+            <div className="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-4 w-full sm:w-auto text-center sm:text-left">
+              <div className="text-xs font-bold text-slate-600 flex items-center space-x-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-blue-600 animate-pulse shrink-0"></span>
+                <span>
+                  Hiển thị <strong className="text-slate-900 font-extrabold">{displayedFiles.length}</strong> / <strong className="text-slate-900 font-extrabold">{filteredFiles.length}</strong> thiết kế
+                </span>
+              </div>
+
+              {/* Progress bar in loadMore mode */}
+              {displayMode === 'loadMore' && (
+                <div className="w-32 bg-slate-100 rounded-full h-2 overflow-hidden border border-slate-200/60 hidden md:block">
+                  <div 
+                    className="bg-gradient-to-r from-blue-600 to-indigo-600 h-full rounded-full transition-all duration-300"
+                    style={{ width: `${Math.min(100, Math.round((displayedFiles.length / filteredFiles.length) * 100))}%` }}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Display Mode & Items Per Page Selector */}
+            <div className="flex items-center space-x-3 text-xs w-full sm:w-auto justify-between sm:justify-end">
+              <div className="flex items-center space-x-1 bg-slate-100 p-1 rounded-2xl border border-slate-200/80">
+                <button
+                  onClick={() => setDisplayMode('loadMore')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    displayMode === 'loadMore'
+                      ? 'bg-white text-blue-600 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Tải thêm
+                </button>
+                <button
+                  onClick={() => setDisplayMode('pagination')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    displayMode === 'pagination'
+                      ? 'bg-white text-blue-600 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Phân trang
+                </button>
+              </div>
+
+              <div className="flex items-center space-x-1.5 bg-slate-50 px-3 py-1.5 rounded-2xl border border-slate-200 text-slate-600">
+                <span className="font-semibold text-[11px] hidden xs:inline">Hiển thị:</span>
+                <select
+                  value={itemsPerPage}
+                  onChange={(e) => setItemsPerPage(Number(e.target.value))}
+                  className="bg-transparent font-bold text-slate-800 focus:outline-none cursor-pointer text-xs"
+                >
+                  <option value={6}>6 mục/trang</option>
+                  <option value={9}>9 mục/trang</option>
+                  <option value={12}>12 mục/trang</option>
+                  <option value={18}>18 mục/trang</option>
+                  <option value={24}>24 mục/trang</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Load More Mode Actions */}
+          {displayMode === 'loadMore' && (
+            <div className="flex flex-wrap items-center justify-center gap-3 pt-3 border-t border-slate-100">
+              {visibleCount < filteredFiles.length ? (
+                <button
+                  onClick={() => setVisibleCount(prev => Math.min(filteredFiles.length, prev + itemsPerPage))}
+                  className="px-6 py-3 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-2xl text-xs font-bold shadow-lg shadow-blue-500/20 transition-all flex items-center space-x-2 cursor-pointer"
+                >
+                  <ChevronDown className="w-4 h-4" />
+                  <span>Tải thêm {Math.min(itemsPerPage, filteredFiles.length - visibleCount)} thiết kế tiếp theo</span>
+                </button>
+              ) : (
+                <div className="text-slate-500 text-xs font-semibold flex items-center space-x-1.5 py-1">
+                  <Check className="w-4 h-4 text-emerald-500" />
+                  <span>Đã tải toàn bộ {filteredFiles.length} thiết kế phù hợp!</span>
+                </div>
+              )}
+
+              {visibleCount > itemsPerPage && (
+                <button
+                  onClick={() => {
+                    setVisibleCount(itemsPerPage);
+                    document.getElementById('design-hub-root')?.scrollIntoView({ behavior: 'smooth' });
+                  }}
+                  className="px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl text-xs font-bold transition-all flex items-center space-x-1 cursor-pointer"
+                >
+                  <ChevronUp className="w-4 h-4" />
+                  <span>Thu gọn</span>
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Pagination Mode Actions */}
+          {displayMode === 'pagination' && totalPages > 1 && (
+            <div className="flex flex-wrap items-center justify-center gap-2 pt-3 border-t border-slate-100">
+              <button
+                onClick={() => {
+                  setCurrentPage(prev => Math.max(1, prev - 1));
+                  document.getElementById('design-hub-root')?.scrollIntoView({ behavior: 'smooth' });
+                }}
+                disabled={currentPage === 1}
+                className="px-3.5 py-2 rounded-xl text-xs font-bold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center space-x-1 cursor-pointer"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                <span className="hidden sm:inline">Trang trước</span>
+              </button>
+
+              <div className="flex items-center space-x-1">
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                  .filter(p => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
+                  .map((page, idx, arr) => {
+                    const prevPage = arr[idx - 1];
+                    const showEllipsis = prevPage && page - prevPage > 1;
+
+                    return (
+                      <React.Fragment key={page}>
+                        {showEllipsis && <span className="px-1.5 text-slate-400 text-xs">...</span>}
+                        <button
+                          onClick={() => {
+                            setCurrentPage(page);
+                            document.getElementById('design-hub-root')?.scrollIntoView({ behavior: 'smooth' });
+                          }}
+                          className={`w-8 h-8 rounded-xl text-xs font-bold transition-all flex items-center justify-center cursor-pointer ${
+                            currentPage === page
+                              ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
+                              : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200'
+                          }`}
+                        >
+                          {page}
+                        </button>
+                      </React.Fragment>
+                    );
+                  })}
+              </div>
+
+              <button
+                onClick={() => {
+                  setCurrentPage(prev => Math.min(totalPages, prev + 1));
+                  document.getElementById('design-hub-root')?.scrollIntoView({ behavior: 'smooth' });
+                }}
+                disabled={currentPage === totalPages}
+                className="px-3.5 py-2 rounded-xl text-xs font-bold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center space-x-1 cursor-pointer"
+              >
+                <span className="hidden sm:inline">Trang tiếp</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
+        </div>
+      )}
+
       {/* Detail Modal pop */}
       {selectedFile && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md animate-fade-in">
-          <div className="bg-white border border-slate-100 rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto bg-slate-950/70 backdrop-blur-md animate-fade-in">
+          <div className="bg-white border border-slate-100 rounded-3xl w-full max-w-2xl my-auto overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
             <div className="relative aspect-[21/9] overflow-hidden bg-slate-100 shrink-0 border-b border-slate-100">
               <img
                 src={selectedFile.previewUrl}
@@ -843,8 +1027,8 @@ export const DesignHub: React.FC<DesignHubProps> = ({ currentUser, files, onFile
 
       {/* Upload Modal (Only for logged-in members/creators) */}
       {isUploadOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md animate-fade-in">
-          <div className="bg-white border border-slate-100 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto bg-slate-950/70 backdrop-blur-md animate-fade-in">
+          <div className="bg-white border border-slate-100 rounded-3xl w-full max-w-lg my-auto overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
             <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50">
               <div className="flex items-center space-x-2">
                 <UploadCloud className="w-5 h-5 text-blue-600" />

@@ -420,8 +420,8 @@ export const ArticleReaderModal: React.FC<ArticleReaderModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-slate-950/60 backdrop-blur-md animate-fade-in">
-      <div className="bg-white rounded-3xl border border-slate-200/80 w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden shadow-2xl animate-scale-up">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 overflow-y-auto bg-slate-950/70 backdrop-blur-md animate-fade-in">
+      <div className="bg-white rounded-3xl border border-slate-200/80 w-full max-w-4xl max-h-[92vh] my-auto flex flex-col overflow-hidden shadow-2xl animate-scale-up">
         
         {/* Top Control Bar */}
         <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 bg-slate-50/80 shrink-0">

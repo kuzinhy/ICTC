@@ -18,7 +18,10 @@ import { LegalComplianceModal } from './LegalComplianceModal';
 import { ArticleEditorModal } from './ArticleEditorModal';
 import { FontUploadModal } from './FontUploadModal';
 import { SecurityCenter } from './SecurityCenter';
-import { fetchContentReports, updateReportStatus } from '../lib/contentModeration';
+import { 
+  fetchContentReports, updateReportStatus, addAuditLog, getAuditLogs, clearAuditLogs, 
+  scanResourceLinks, calculateQualityScore, AuditLogEntry, LinkHealthReport 
+} from '../lib/contentModeration';
 import { 
   saveArticleToDb, deleteArticleFromDb, saveDesignToDb, savePromptToDb,
   fetchFontsFromDb, saveFontToDb, deleteFontFromDb, deleteDesignFromDb, deletePromptFromDb
@@ -64,12 +67,25 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onConfigUpdate
 }) => {
   const { success: toastSuccess, info: toastInfo, warning: toastWarning } = useToast();
-  const [activeSubTab, setActiveSubTab] = useState<'moderation' | 'reports' | 'articles' | 'fonts' | 'users' | 'security' | 'settings' | 'uploadResearch' | 'ideas'>('moderation');
+  const [activeSubTab, setActiveSubTab] = useState<'moderation' | 'reports' | 'articles' | 'fonts' | 'users' | 'audit' | 'linkChecker' | 'security' | 'settings' | 'uploadResearch' | 'ideas'>('moderation');
   const [localConfig, setLocalConfig] = useState<SystemConfig>(systemConfig);
   const [reportsList, setReportsList] = useState<ContentReport[]>([]);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [communityIdeas, setCommunityIdeas] = useState<CommunityIdea[]>([]);
   const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false);
+
+  // Audit Logs State
+  const [auditLogsList, setAuditLogsList] = useState<AuditLogEntry[]>([]);
+  const [auditSearch, setAuditSearch] = useState('');
+  const [auditActionFilter, setAuditActionFilter] = useState<string>('ALL');
+
+  // Link Health Checker State
+  const [linkReports, setLinkReports] = useState<LinkHealthReport[]>([]);
+  const [linkFilter, setLinkFilter] = useState<'all' | 'unhealthy' | 'healthy'>('all');
+  const [isScanningLinks, setIsScanningLinks] = useState(false);
+
+  // Batch Selection State for Moderation
+  const [selectedBatchIds, setSelectedBatchIds] = useState<string[]>([]);
 
   // Load Community Ideas
   useEffect(() => {
@@ -108,6 +124,62 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // Quick Preview Modal State
   const [previewItem, setPreviewItem] = useState<{ type: 'design' | 'prompt' | 'article'; data: any } | null>(null);
 
+  // Review Comments State for Admin Feedback
+  const [commentInputs, setCommentInputs] = useState<{ [key: string]: string }>({});
+
+  const handleAddReviewComment = (id: string, type: 'design' | 'prompt' | 'article') => {
+    const text = (commentInputs[id] || '').trim();
+    if (!text) return;
+
+    const newComment = {
+      id: `comm-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      author: currentUser.displayName || 'Quản trị viên',
+      authorRole: currentUser.role,
+      text,
+      createdAt: new Date().toLocaleString('vi-VN'),
+      isStaff: true
+    };
+
+    let targetTitle = id;
+    if (type === 'design') {
+      const target = designFiles.find(f => f.id === id);
+      if (!target) return;
+      targetTitle = target.title;
+      const comments = [...(target.comments || []), newComment];
+      const updated = designFiles.map(f => f.id === id ? { ...f, comments } : f);
+      onDesignUpdate(updated);
+      saveDesignToDb({ ...target, comments }).catch(console.warn);
+    } else if (type === 'prompt') {
+      const target = promptFiles.find(p => p.id === id);
+      if (!target) return;
+      targetTitle = target.title;
+      const comments = [...(target.comments || []), newComment];
+      const updated = promptFiles.map(p => p.id === id ? { ...p, comments } : p);
+      onPromptUpdate(updated);
+      savePromptToDb({ ...target, comments }).catch(console.warn);
+    } else if (type === 'article') {
+      const target = articlesList.find(a => a.id === id);
+      if (!target) return;
+      targetTitle = target.title;
+      const comments = [...(target.comments || []), newComment];
+      const updated = articlesList.map(a => a.id === id ? { ...a, comments } : a);
+      onArticleUpdate(updated);
+      saveArticleToDb({ ...target, comments }).catch(console.warn);
+    }
+
+    addAuditLog({
+      actorName: currentUser.displayName,
+      actorRole: currentUser.role,
+      actionType: 'CONFIG_UPDATE',
+      targetType: type,
+      targetTitle,
+      details: `Gửi nhận xét phản hồi kiểm duyệt: "${text}"`
+    });
+
+    setCommentInputs({ ...commentInputs, [id]: '' });
+    showToast('Đã gửi nhận xét phản hồi cho tác giả thành công!');
+  };
+
   // Modals for Compliance & Vietnam Standards
   const [isPaletteOpen, setIsPaletteOpen] = useState(false);
   const [isLegalOpen, setIsLegalOpen] = useState(false);
@@ -126,14 +198,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   // Load Admin Data
   const loadAllData = () => {
-    // 7. Content Reports
+    // Content Reports
     const reports = fetchContentReports();
     setReportsList(reports);
+
+    // Audit Logs
+    const logs = getAuditLogs();
+    setAuditLogsList(logs);
+
+    // Link reports scan
+    const links = scanResourceLinks(designFiles, promptFiles, articlesList, fontsList);
+    setLinkReports(links);
   };
 
   useEffect(() => {
     loadAllData();
-  }, [activeSubTab]);
+  }, [activeSubTab, designFiles, promptFiles, articlesList, fontsList]);
 
   // Counts of pending items
   const pendingDesigns = designFiles.filter(f => f.status === 'Pending');
@@ -149,6 +229,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     if (target) {
       saveArticleToDb(target).catch(console.warn);
     }
+    addAuditLog({
+      actorName: currentUser.displayName,
+      actorRole: currentUser.role,
+      actionType: 'CONFIG_UPDATE',
+      targetType: 'article',
+      targetTitle: art.title,
+      details: `${art.isPinned ? 'Bỏ ghim' : 'Ghim nổi bật'} bài viết`
+    });
     showToast(`Đã ${art.isPinned ? 'bỏ ghim' : 'ghim nổi bật'} bài viết!`);
   };
 
@@ -175,14 +263,31 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
     onArticleUpdate(updated);
     saveArticleToDb(savedArticle).catch(console.warn);
+    addAuditLog({
+      actorName: currentUser.displayName,
+      actorRole: currentUser.role,
+      actionType: 'APPROVE',
+      targetType: 'article',
+      targetTitle: savedArticle.title,
+      details: 'Soạn thảo & cập nhật bài viết thành công'
+    });
   };
 
   // Handle Delete Article
   const handleDeleteArticle = async (id: string) => {
+    const target = articlesList.find(a => a.id === id);
     if (!confirm('Bạn có chắc chắn muốn xóa bài viết này không?')) return;
     const updated = articlesList.filter(a => a.id !== id);
     onArticleUpdate(updated);
     deleteArticleFromDb(id).catch(console.warn);
+    addAuditLog({
+      actorName: currentUser.displayName,
+      actorRole: currentUser.role,
+      actionType: 'DELETE',
+      targetType: 'article',
+      targetTitle: target?.title || id,
+      details: 'Xóa vĩnh viễn bài viết khỏi hệ thống'
+    });
     showToast('Đã xóa bài viết thành công!');
   };
 
@@ -199,14 +304,31 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
     onDesignUpdate(updated);
     saveDesignToDb(savedDesign).catch(console.warn);
+    addAuditLog({
+      actorName: currentUser.displayName,
+      actorRole: currentUser.role,
+      actionType: 'APPROVE',
+      targetType: 'design',
+      targetTitle: savedDesign.title,
+      details: 'Cập nhật/Thêm mới tệp thiết kế'
+    });
     setIsDesignEditorOpen(false);
   };
 
   const handleDeleteDesign = async (id: string) => {
+    const target = designFiles.find(f => f.id === id);
     if (!confirm('Bạn có chắc chắn muốn xóa vĩnh viễn tệp thiết kế này khỏi hệ thống không?')) return;
     const updated = designFiles.filter(f => f.id !== id);
     onDesignUpdate(updated);
     deleteDesignFromDb(id).catch(console.warn);
+    addAuditLog({
+      actorName: currentUser.displayName,
+      actorRole: currentUser.role,
+      actionType: 'DELETE',
+      targetType: 'design',
+      targetTitle: target?.title || id,
+      details: 'Xóa tệp thiết kế khỏi cơ sở dữ liệu'
+    });
     showToast('Đã xóa tệp thiết kế thành công!');
   };
 
@@ -223,62 +345,130 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
     onPromptUpdate(updated);
     savePromptToDb(savedPrompt).catch(console.warn);
+    addAuditLog({
+      actorName: currentUser.displayName,
+      actorRole: currentUser.role,
+      actionType: 'APPROVE',
+      targetType: 'prompt',
+      targetTitle: savedPrompt.title,
+      details: 'Cập nhật/Thêm mới câu lệnh AI Prompt'
+    });
     setIsPromptEditorOpen(false);
   };
 
   const handleDeletePrompt = async (id: string) => {
+    const target = promptFiles.find(p => p.id === id);
     if (!confirm('Bạn có chắc chắn muốn xóa vĩnh viễn AI Prompt này khỏi hệ thống không?')) return;
     const updated = promptFiles.filter(p => p.id !== id);
     onPromptUpdate(updated);
     deletePromptFromDb(id).catch(console.warn);
+    addAuditLog({
+      actorName: currentUser.displayName,
+      actorRole: currentUser.role,
+      actionType: 'DELETE',
+      targetType: 'prompt',
+      targetTitle: target?.title || id,
+      details: 'Xóa câu lệnh AI Prompt'
+    });
     showToast('Đã xóa AI Prompt thành công!');
   };
 
   // Handle Content Approval
   const handleApproveContent = (id: string, type: 'design' | 'prompt' | 'article') => {
+    let itemTitle = id;
     if (type === 'design') {
+      const target = designFiles.find(f => f.id === id);
+      if (target) itemTitle = target.title;
       const updated = designFiles.map(f => f.id === id ? { ...f, status: 'Approved' as const, rejectionReason: undefined } : f);
       onDesignUpdate(updated);
-      const target = updated.find(f => f.id === id);
-      if (target) saveDesignToDb(target).catch(console.warn);
+      if (target) saveDesignToDb({ ...target, status: 'Approved', rejectionReason: undefined }).catch(console.warn);
       showToast('Đã phê duyệt và xuất bản file thiết kế thành công!');
     } else if (type === 'prompt') {
+      const target = promptFiles.find(p => p.id === id);
+      if (target) itemTitle = target.title;
       const updated = promptFiles.map(p => p.id === id ? { ...p, status: 'Approved' as const, rejectionReason: undefined } : p);
       onPromptUpdate(updated);
-      const target = updated.find(p => p.id === id);
-      if (target) savePromptToDb(target).catch(console.warn);
+      if (target) savePromptToDb({ ...target, status: 'Approved', rejectionReason: undefined }).catch(console.warn);
       showToast('Đã phê duyệt và công khai câu lệnh AI thành công!');
     } else if (type === 'article') {
+      const target = articlesList.find(a => a.id === id);
+      if (target) itemTitle = target.title;
       const updated = articlesList.map(a => a.id === id ? { ...a, status: 'Published' as const, rejectionReason: undefined } : a);
       onArticleUpdate(updated);
-      const target = updated.find(a => a.id === id);
-      if (target) saveArticleToDb(target).catch(console.warn);
+      if (target) saveArticleToDb({ ...target, status: 'Published', rejectionReason: undefined }).catch(console.warn);
       showToast('Đã phê duyệt và xuất bản bài viết lên trang tin tức!');
     }
+
+    addAuditLog({
+      actorName: currentUser.displayName,
+      actorRole: currentUser.role,
+      actionType: 'APPROVE',
+      targetType: type,
+      targetTitle: itemTitle,
+      details: 'Phê duyệt xuất bản nội dung công khai'
+    });
 
     if (previewItem && previewItem.data.id === id) {
       setPreviewItem(null);
     }
   };
 
-  // Handle Batch Approve all pending
+  // Handle Batch Approve selected or all
+  const handleBatchApproveSelected = () => {
+    if (selectedBatchIds.length === 0) {
+      toastWarning('Vui lòng chọn ít nhất 1 bài đăng để xử lý hàng loạt.', 'Chọn bài');
+      return;
+    }
+    if (!confirm(`Bạn có chắc muốn phê duyệt hàng loạt ${selectedBatchIds.length} bài đăng đã chọn?`)) return;
+
+    // Approve selected designs
+    const updatedDesigns = designFiles.map(f => selectedBatchIds.includes(f.id) ? { ...f, status: 'Approved' as const } : f);
+    onDesignUpdate(updatedDesigns);
+
+    // Approve selected prompts
+    const updatedPrompts = promptFiles.map(p => selectedBatchIds.includes(p.id) ? { ...p, status: 'Approved' as const } : p);
+    onPromptUpdate(updatedPrompts);
+
+    // Approve selected articles
+    const updatedArticles = articlesList.map(a => selectedBatchIds.includes(a.id) ? { ...a, status: 'Published' as const } : a);
+    onArticleUpdate(updatedArticles);
+
+    addAuditLog({
+      actorName: currentUser.displayName,
+      actorRole: currentUser.role,
+      actionType: 'APPROVE',
+      targetType: 'system',
+      targetTitle: 'Phê duyệt theo lô',
+      details: `Phê duyệt hàng loạt ${selectedBatchIds.length} tài nguyên`
+    });
+
+    showToast(`Đã phê duyệt thành công ${selectedBatchIds.length} tài nguyên đã chọn!`);
+    setSelectedBatchIds([]);
+  };
+
   const handleBatchApproveAll = () => {
     if (totalPending === 0) return;
     if (!confirm(`Bạn có chắc muốn phê duyệt toàn bộ ${totalPending} bài đăng đang chờ không?`)) return;
 
-    // Approve designs
     const updatedDesigns = designFiles.map(f => f.status === 'Pending' ? { ...f, status: 'Approved' as const } : f);
     onDesignUpdate(updatedDesigns);
 
-    // Approve prompts
     const updatedPrompts = promptFiles.map(p => p.status === 'Pending' ? { ...p, status: 'Approved' as const } : p);
     onPromptUpdate(updatedPrompts);
 
-    // Approve articles
     const updatedArticles = articlesList.map(a => a.status === 'Pending' ? { ...a, status: 'Published' as const } : a);
     onArticleUpdate(updatedArticles);
 
-    showToast(`Đã phê duyệt thành công ${totalPending} tài nguyên!`);
+    addAuditLog({
+      actorName: currentUser.displayName,
+      actorRole: currentUser.role,
+      actionType: 'APPROVE',
+      targetType: 'system',
+      targetTitle: 'Phê duyệt toàn bộ',
+      details: `Đã phê duyệt tất cả ${totalPending} tài nguyên đang chờ`
+    });
+
+    showToast(`Đã phê duyệt thành công toàn bộ ${totalPending} tài nguyên!`);
   };
 
   // Open Rejection Dialog
@@ -449,6 +639,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             { id: 'articles', label: `Bài viết (${articlesList.length})`, icon: BookOpen },
             { id: 'fonts', label: `Quản lý Font (${fontsList.length})`, icon: Type },
             { id: 'users', label: `Thành viên (${userList.length})`, icon: Users },
+            { id: 'audit', label: 'Nhật ký Nhật trình', icon: FileText, iconColor: 'text-blue-600' },
+            { id: 'linkChecker', label: 'Quét Liên kết Drive', icon: ExternalLink, iconColor: 'text-cyan-600' },
             { id: 'security', label: 'Bảo mật & Phòng vệ', icon: ShieldCheck, iconColor: 'text-emerald-600' },
             { id: 'settings', label: 'Cấu hình chung', icon: Settings },
             { id: 'uploadResearch', label: 'Drive Research', icon: HardDrive },
@@ -502,10 +694,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       </div>
 
       {/* Quick Admin Action Toolbar */}
-      <div className="px-6 py-3.5 bg-slate-900 text-white flex flex-wrap items-center justify-between gap-3 border-b border-slate-800">
-        <div className="flex items-center space-x-2 text-xs font-bold text-slate-300">
-          <Zap className="w-4 h-4 text-amber-400 animate-bounce" />
-          <span className="uppercase tracking-wider text-amber-400 font-black">Công cụ Quản trị Nhanh:</span>
+      <div className="px-6 py-3.5 bg-gradient-to-r from-blue-50/80 via-slate-50 to-indigo-50/80 text-slate-800 flex flex-wrap items-center justify-between gap-3 border-b border-blue-100/80 shadow-xs">
+        <div className="flex items-center space-x-2 text-xs font-bold text-blue-900 bg-blue-100/80 px-3 py-1 rounded-xl border border-blue-200/60">
+          <Zap className="w-4 h-4 text-blue-600 animate-bounce" />
+          <span className="uppercase tracking-wider font-extrabold text-blue-900">Công cụ Quản trị Nhanh:</span>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -514,7 +706,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               setEditingDesign(null);
               setIsDesignEditorOpen(true);
             }}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-black rounded-xl shadow-md shadow-blue-500/20 transition-all flex items-center space-x-1.5 active:scale-95 cursor-pointer ring-2 ring-blue-400/30"
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-sm shadow-blue-500/20 transition-all flex items-center space-x-1.5 active:scale-95 cursor-pointer"
             title="Thêm trực tiếp mẫu thiết kế Slide / UI / Đồ án mới"
           >
             <Plus className="w-4 h-4" />
@@ -526,7 +718,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               setEditingArticle(null);
               setIsArticleEditorOpen(true);
             }}
-            className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black rounded-xl shadow-sm transition-all flex items-center space-x-1.5 active:scale-95"
+            className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-sm shadow-emerald-500/20 transition-all flex items-center space-x-1.5 active:scale-95 cursor-pointer"
             title="Soạn thảo và đăng bài viết tri thức mới"
           >
             <Plus className="w-4 h-4" />
@@ -538,7 +730,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               setEditingPrompt(null);
               setIsPromptEditorOpen(true);
             }}
-            className="px-3.5 py-2 bg-purple-600 hover:bg-purple-500 text-white text-xs font-black rounded-xl shadow-sm transition-all flex items-center space-x-1.5 active:scale-95"
+            className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-sm shadow-indigo-500/20 transition-all flex items-center space-x-1.5 active:scale-95 cursor-pointer"
             title="Đóng góp câu lệnh AI Prompt cao cấp mới"
           >
             <Plus className="w-4 h-4" />
@@ -550,7 +742,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               setEditingFont(null);
               setIsFontUploadModalOpen(true);
             }}
-            className="px-3.5 py-2 bg-amber-600 hover:bg-amber-500 text-white text-xs font-black rounded-xl shadow-sm transition-all flex items-center space-x-1.5 active:scale-95"
+            className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl shadow-sm shadow-amber-500/20 transition-all flex items-center space-x-1.5 active:scale-95 cursor-pointer"
             title="Tải lên bộ Font chữ Việt hóa mới"
           >
             <Plus className="w-4 h-4" />
@@ -559,10 +751,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
           <button
             onClick={() => setIsLeaderboardOpen(true)}
-            className="px-3.5 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 text-xs font-black rounded-xl shadow-md transition-all flex items-center space-x-1.5 active:scale-95 cursor-pointer"
+            className="px-3.5 py-2 bg-amber-50 hover:bg-amber-100/80 text-amber-900 border border-amber-200/90 text-xs font-bold rounded-xl shadow-xs transition-all flex items-center space-x-1.5 active:scale-95 cursor-pointer"
             title="Xem bảng xếp hạng tác giả & huy hiệu đóng góp"
           >
-            <Award className="w-4 h-4 text-slate-950" />
+            <Award className="w-4 h-4 text-amber-600" />
             <span>Bảng Xếp Hạng & Huy Hiệu</span>
           </button>
 
@@ -571,22 +763,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               exportDesignsToCSV(designFiles);
               toastSuccess('Đã xuất dữ liệu thiết kế ra tệp CSV thành công!', 'Xuất dữ liệu');
             }}
-            className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold rounded-xl transition-all flex items-center space-x-1.5 cursor-pointer"
+            className="px-3.5 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200/90 text-xs font-bold rounded-xl shadow-xs transition-all flex items-center space-x-1.5 cursor-pointer"
             title="Xuất báo cáo danh sách tài nguyên ra file Excel / CSV"
           >
-            <Download className="w-4 h-4 text-sky-400" />
+            <Download className="w-4 h-4 text-sky-600" />
             <span>Xuất CSV Báo cáo</span>
           </button>
 
           <button
             onClick={() => setActiveSubTab('ideas')}
-            className={`px-3.5 py-2 text-xs font-black rounded-xl transition-all flex items-center space-x-1.5 active:scale-95 ${
+            className={`px-3.5 py-2 text-xs font-bold rounded-xl transition-all flex items-center space-x-1.5 active:scale-95 cursor-pointer ${
               activeSubTab === 'ideas'
-                ? 'bg-amber-500 text-slate-950 font-black'
-                : 'bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700'
+                ? 'bg-amber-500 text-white shadow-sm'
+                : 'bg-white hover:bg-amber-50 text-amber-800 border border-amber-200'
             }`}
           >
-            <Lightbulb className="w-4 h-4" />
+            <Lightbulb className="w-4 h-4 text-amber-600" />
             <span>Sáng kiến Ý tưởng</span>
           </button>
         </div>
@@ -747,10 +939,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   </button>
                 </div>
 
+                {modStatus === 'pending' && selectedBatchIds.length > 0 && (
+                  <button
+                    onClick={handleBatchApproveSelected}
+                    className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-black rounded-xl shadow-xs transition-all active:scale-95 flex items-center space-x-1 whitespace-nowrap animate-bounce"
+                  >
+                    <CheckCheck className="w-4 h-4" />
+                    <span>Duyệt đã chọn ({selectedBatchIds.length})</span>
+                  </button>
+                )}
+
                 {modStatus === 'pending' && totalPending > 0 && (
                   <button
                     onClick={handleBatchApproveAll}
-                    className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-xl shadow-xs transition-all active:scale-95 flex items-center space-x-1 whitespace-nowrap"
+                    className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-xl shadow-xs transition-all active:scale-95 flex items-center space-x-1 whitespace-nowrap cursor-pointer"
                   >
                     <CheckCheck className="w-4 h-4" />
                     <span>Duyệt tất cả</span>
@@ -791,17 +993,34 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                   const isPending = data.status === 'Pending';
                   const isRejected = data.status === 'Rejected';
 
+                  const quality = calculateQualityScore(data, type);
+                  const isSelected = selectedBatchIds.includes(data.id);
+
                   return (
                     <div 
                       key={`${type}-${data.id}`}
-                      className={`bg-white border rounded-2xl p-5 flex flex-col justify-between space-y-4 transition-all hover:shadow-md ${
+                      className={`bg-white border rounded-2xl p-5 flex flex-col justify-between space-y-4 transition-all hover:shadow-md relative ${
                         isPending ? 'border-amber-300 bg-amber-50/10' : isRejected ? 'border-rose-200 bg-rose-50/10' : 'border-slate-200'
-                      }`}
+                      } ${isSelected ? 'ring-2 ring-blue-500 bg-blue-50/20' : ''}`}
                     >
                       <div className="space-y-2.5">
                         {/* Header badges */}
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center space-x-1.5 flex-wrap">
+                            {isPending && (
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setSelectedBatchIds([...selectedBatchIds, data.id]);
+                                  } else {
+                                    setSelectedBatchIds(selectedBatchIds.filter(id => id !== data.id));
+                                  }
+                                }}
+                                className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer mr-1"
+                              />
+                            )}
                             <span className={`px-2 py-0.5 text-[9px] font-black uppercase rounded ${
                               type === 'design' ? 'bg-blue-100 text-blue-800' :
                               type === 'prompt' ? 'bg-purple-100 text-purple-800' : 'bg-emerald-100 text-emerald-800'
@@ -811,11 +1030,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             <span className="px-2 py-0.5 bg-slate-100 text-slate-700 text-[9px] font-bold rounded">
                               {data.category}
                             </span>
-                            {data.fileType && (
-                              <span className="px-1.5 py-0.5 bg-amber-100 text-amber-800 text-[9px] font-extrabold rounded uppercase">
-                                {data.fileType}
-                              </span>
-                            )}
+                            <span className={`px-2 py-0.5 text-[9px] font-black rounded border ${
+                              quality.score >= 80 ? 'bg-emerald-50 text-emerald-800 border-emerald-200' :
+                              quality.score >= 60 ? 'bg-blue-50 text-blue-800 border-blue-200' :
+                              'bg-amber-50 text-amber-800 border-amber-200'
+                            }`}>
+                              Chất lượng: {quality.score}/100 ({quality.badge})
+                            </span>
                           </div>
 
                           <span className={`px-2 py-0.5 text-[9px] font-black rounded uppercase ${
@@ -863,6 +1084,57 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             <span><strong>Lý do từ chối:</strong> {data.rejectionReason}</span>
                           </div>
                         )}
+
+                        {/* Comments / Review Feedback Thread */}
+                        <div className="mt-3 pt-3 border-t border-slate-100 space-y-2 bg-slate-50/70 p-3 rounded-xl">
+                          <div className="flex items-center justify-between text-[11px] font-bold text-slate-700">
+                            <span className="flex items-center space-x-1">
+                              <MessageSquare className="w-3.5 h-3.5 text-blue-600" />
+                              <span>Nhận xét & Phản hồi kiểm duyệt ({data.comments?.length || 0})</span>
+                            </span>
+                          </div>
+
+                          {data.comments && data.comments.length > 0 && (
+                            <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                              {data.comments.map((comm: any) => (
+                                <div key={comm.id} className="p-2 bg-white rounded-lg border border-slate-200 text-xs">
+                                  <div className="flex items-center justify-between mb-0.5">
+                                    <span className="font-bold text-slate-900 flex items-center space-x-1">
+                                      <span>{comm.author}</span>
+                                      {comm.isStaff && (
+                                        <span className="px-1.5 py-0.2 bg-blue-100 text-blue-800 text-[9px] font-black rounded">Admin/Staff</span>
+                                      )}
+                                    </span>
+                                    <span className="text-[10px] text-slate-400 font-mono">{comm.createdAt}</span>
+                                  </div>
+                                  <p className="text-slate-700">{comm.text}</p>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Input to send comment */}
+                          <div className="flex items-center space-x-2 pt-1">
+                            <input
+                              type="text"
+                              placeholder="Nhập nhận xét, lý do từ chối hoặc yêu cầu chỉnh sửa..."
+                              value={commentInputs[data.id] || ''}
+                              onChange={(e) => setCommentInputs({ ...commentInputs, [data.id]: e.target.value })}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  handleAddReviewComment(data.id, type);
+                                }
+                              }}
+                              className="flex-1 px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                            />
+                            <button
+                              onClick={() => handleAddReviewComment(data.id, type)}
+                              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition-all shrink-0 cursor-pointer"
+                            >
+                              Gửi góp ý
+                            </button>
+                          </div>
+                        </div>
                       </div>
 
                       {/* Action buttons */}
@@ -1694,6 +1966,265 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         )}
 
         {/* ========================================================================= */}
+        {/* TAB: AUDIT LOGS CENTER (NHẬT KÝ HỆ THỐNG) */}
+        {/* ========================================================================= */}
+        {activeSubTab === 'audit' && (
+          <div className="space-y-6 animate-fade-in">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 bg-gradient-to-r from-blue-900 via-slate-900 to-indigo-900 rounded-2xl text-white shadow-lg">
+              <div className="flex items-center space-x-3.5">
+                <div className="p-3 bg-white/10 backdrop-blur-md rounded-2xl border border-white/20">
+                  <FileText className="w-6 h-6 text-blue-300" />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-black tracking-tight">Nhật Ký Nhật Trình & Lịch Sử Thao Tác Quản Trị</h3>
+                  <p className="text-xs text-blue-200 font-medium">Theo dõi lịch sử duyệt bài, phân quyền, xóa tài nguyên và truy xuất dữ liệu hệ thống</p>
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-2 shrink-0">
+                <button
+                  onClick={() => {
+                    if (confirm('Bạn có chắc chắn muốn xóa toàn bộ nhật ký thao tác lưu trong bộ nhớ cục bộ?')) {
+                      clearAuditLogs();
+                      setAuditLogsList([]);
+                      toastSuccess('Đã xóa lịch sử nhật ký hệ thống.', 'Nhật ký');
+                    }
+                  }}
+                  className="px-3.5 py-2 bg-rose-600/80 hover:bg-rose-600 text-white text-xs font-bold rounded-xl transition-all flex items-center space-x-1.5 cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Xóa nhật ký</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Filter and Search Bar */}
+            <div className="bg-slate-50 border border-slate-200/80 p-4 rounded-2xl flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Tìm kiếm theo tiêu đề, người thực hiện hoặc chi tiết..."
+                  value={auditSearch}
+                  onChange={(e) => setAuditSearch(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="flex items-center space-x-2 overflow-x-auto shrink-0">
+                <span className="text-xs font-bold text-slate-500">Loại thao tác:</span>
+                {['ALL', 'APPROVE', 'REJECT', 'DELETE', 'ROLE_CHANGE', 'CONFIG_UPDATE', 'SYSTEM_SCAN'].map((type) => (
+                  <button
+                    key={type}
+                    onClick={() => setAuditActionFilter(type)}
+                    className={`px-3 py-1.5 rounded-xl text-[11px] font-bold transition-all cursor-pointer ${
+                      auditActionFilter === type
+                        ? 'bg-blue-600 text-white shadow-xs'
+                        : 'bg-white text-slate-600 hover:bg-slate-200/60 border border-slate-200'
+                    }`}
+                  >
+                    {type === 'ALL' ? 'Tất cả' : type}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Audit Logs Table */}
+            <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-xs">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-100/80 border-b border-slate-200 text-slate-700 font-bold uppercase tracking-wider text-[10px]">
+                    <tr>
+                      <th className="px-4 py-3">Thời gian</th>
+                      <th className="px-4 py-3">Người thực hiện</th>
+                      <th className="px-4 py-3">Hành động</th>
+                      <th className="px-4 py-3">Đối tượng</th>
+                      <th className="px-4 py-3">Nội dung / Tiêu đề</th>
+                      <th className="px-4 py-3">Ghi chú chi tiết</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 font-medium text-slate-800">
+                    {auditLogsList
+                      .filter(log => {
+                        const matchSearch = auditSearch.trim() === '' || 
+                          log.actorName.toLowerCase().includes(auditSearch.toLowerCase()) ||
+                          log.targetTitle.toLowerCase().includes(auditSearch.toLowerCase()) ||
+                          log.details.toLowerCase().includes(auditSearch.toLowerCase());
+                        const matchType = auditActionFilter === 'ALL' || log.actionType === auditActionFilter;
+                        return matchSearch && matchType;
+                      })
+                      .map((log) => {
+                        let actionBadge = 'bg-slate-100 text-slate-700 border-slate-200';
+                        if (log.actionType === 'APPROVE') actionBadge = 'bg-emerald-100 text-emerald-800 border-emerald-200';
+                        if (log.actionType === 'REJECT') actionBadge = 'bg-rose-100 text-rose-800 border-rose-200';
+                        if (log.actionType === 'DELETE') actionBadge = 'bg-red-100 text-red-900 border-red-300 font-black';
+                        if (log.actionType === 'ROLE_CHANGE') actionBadge = 'bg-purple-100 text-purple-800 border-purple-200';
+                        if (log.actionType === 'SYSTEM_SCAN') actionBadge = 'bg-blue-100 text-blue-800 border-blue-200';
+
+                        return (
+                          <tr key={log.id} className="hover:bg-slate-50/80 transition-colors">
+                            <td className="px-4 py-3 text-slate-400 font-mono text-[11px] whitespace-nowrap">{log.timestamp}</td>
+                            <td className="px-4 py-3 font-bold text-slate-900">
+                              {log.actorName}
+                              <span className="block text-[10px] text-slate-400 font-normal">{log.actorRole}</span>
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap">
+                              <span className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold uppercase border ${actionBadge}`}>
+                                {log.actionType}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 uppercase text-[10px] font-bold text-slate-500 whitespace-nowrap">
+                              {log.targetType}
+                            </td>
+                            <td className="px-4 py-3 font-bold text-slate-900 max-w-xs truncate">
+                              {log.targetTitle}
+                            </td>
+                            <td className="px-4 py-3 text-slate-600">
+                              {log.details}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    {auditLogsList.length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
+                          Chưa có nhật ký thao tác nào được ghi nhận.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================================= */}
+        {/* TAB: LINK HEALTH CHECKER (CÔNG CỤ QUÉT LIÊN KẾT LIVE DRIVE) */}
+        {/* ========================================================================= */}
+        {activeSubTab === 'linkChecker' && (
+          <div className="space-y-6 animate-fade-in">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 bg-gradient-to-r from-teal-800 via-cyan-900 to-slate-900 rounded-2xl text-white shadow-lg">
+              <div className="flex items-center space-x-3.5">
+                <div className="p-3 bg-white/10 backdrop-blur-md rounded-2xl border border-white/20">
+                  <ExternalLink className="w-6 h-6 text-cyan-300" />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-black tracking-tight">Công Cụ Kiểm Tra & Quét Tình Trạng Liên Kết Live</h3>
+                  <p className="text-xs text-cyan-200 font-medium">Tự động phát hiện liên kết Google Drive hỏng, định dạng sai hoặc chưa mở quyền chia sẻ</p>
+                </div>
+              </div>
+
+              <button
+                onClick={() => {
+                  setIsScanningLinks(true);
+                  setTimeout(() => {
+                    const links = scanResourceLinks(designFiles, promptFiles, articlesList, fontsList);
+                    setLinkReports(links);
+                    setIsScanningLinks(false);
+                    toastSuccess(`Đã quét xong ${links.length} tài nguyên.`, 'Kiểm tra liên kết');
+                  }, 600);
+                }}
+                disabled={isScanningLinks}
+                className="px-4 py-2.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black text-xs rounded-xl shadow-md transition-all shrink-0 flex items-center space-x-1.5 cursor-pointer disabled:opacity-50"
+              >
+                <RefreshCw className={`w-4 h-4 ${isScanningLinks ? 'animate-spin' : ''}`} />
+                <span>{isScanningLinks ? 'Đang quét...' : 'Khởi chạy Quét Tự Động'}</span>
+              </button>
+            </div>
+
+            {/* Stat Summary */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl flex items-center space-x-3">
+                <div className="p-3 bg-slate-800 text-white rounded-xl">
+                  <Folder className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-slate-500 uppercase">Tổng tài nguyên kiểm tra</p>
+                  <p className="text-lg font-black text-slate-900">{linkReports.length} tài nguyên</p>
+                </div>
+              </div>
+
+              <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-2xl flex items-center space-x-3">
+                <div className="p-3 bg-emerald-600 text-white rounded-xl">
+                  <CheckCircle className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-emerald-800 uppercase">Liên kết hợp lệ (Live OK)</p>
+                  <p className="text-lg font-black text-emerald-950">{linkReports.filter(r => r.isHealthy).length} ok</p>
+                </div>
+              </div>
+
+              <div className="bg-rose-50 border border-rose-200 p-4 rounded-2xl flex items-center space-x-3">
+                <div className="p-3 bg-rose-600 text-white rounded-xl">
+                  <AlertTriangle className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-rose-800 uppercase">Cần kiểm tra / Lỗi link</p>
+                  <p className="text-lg font-black text-rose-950">{linkReports.filter(r => !r.isHealthy).length} chú ý</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Link Checker Table */}
+            <div className="bg-white border border-slate-200/80 rounded-2xl overflow-hidden shadow-xs">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-100/80 border-b border-slate-200 text-slate-700 font-bold uppercase tracking-wider text-[10px]">
+                    <tr>
+                      <th className="px-4 py-3">Tài nguyên</th>
+                      <th className="px-4 py-3">Loại</th>
+                      <th className="px-4 py-3">Tác giả</th>
+                      <th className="px-4 py-3">Đường dẫn đính kèm</th>
+                      <th className="px-4 py-3">Trạng thái</th>
+                      <th className="px-4 py-3">Đề xuất xử lý</th>
+                      <th className="px-4 py-3 text-right">Thao tác</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 font-medium text-slate-800">
+                    {linkReports.map((item) => (
+                      <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="px-4 py-3 font-bold text-slate-900 max-w-xs truncate">{item.title}</td>
+                        <td className="px-4 py-3 uppercase text-[10px] font-bold text-slate-500 whitespace-nowrap">{item.type}</td>
+                        <td className="px-4 py-3 text-slate-600 whitespace-nowrap">{item.author}</td>
+                        <td className="px-4 py-3 text-slate-500 font-mono text-[11px] max-w-xs truncate">{item.url}</td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          {item.isHealthy ? (
+                            <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 text-[10px] font-extrabold rounded-md border border-emerald-200 flex items-center space-x-1 w-fit">
+                              <Check className="w-3 h-3" />
+                              <span>LIVE OK</span>
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 bg-rose-100 text-rose-800 text-[10px] font-extrabold rounded-md border border-rose-200 flex items-center space-x-1 w-fit">
+                              <AlertCircle className="w-3 h-3" />
+                              <span>CẦN SỬA</span>
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-slate-600 text-[11px]">{item.suggestion}</td>
+                        <td className="px-4 py-3 text-right whitespace-nowrap">
+                          {item.url && item.url.startsWith('http') && (
+                            <a
+                              href={item.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[11px] font-bold inline-flex items-center space-x-1"
+                            >
+                              <span>Kiểm tra link</span>
+                              <ArrowUpRight className="w-3 h-3" />
+                            </a>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================================= */}
         {/* TAB 5: DRIVE UPLOAD RESEARCH */}
         {/* ========================================================================= */}
         {activeSubTab === 'uploadResearch' && (
@@ -1818,8 +2349,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       {/* REJECTION REASON MODAL */}
       {/* ========================================================================= */}
       {rejectionModalItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-fade-in">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-slate-100">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto bg-slate-950/70 backdrop-blur-md animate-fade-in">
+          <div className="bg-white rounded-3xl max-w-md w-full my-auto p-6 space-y-4 shadow-2xl border border-slate-100">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center space-x-2 text-rose-600">
                 <AlertCircle className="w-5 h-5" />
@@ -1889,8 +2420,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       {/* QUICK PREVIEW MODAL */}
       {/* ========================================================================= */}
       {previewItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-fade-in">
-          <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[85vh] flex flex-col shadow-2xl border border-slate-100 overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto bg-slate-950/70 backdrop-blur-md animate-fade-in">
+          <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[85vh] my-auto flex flex-col shadow-2xl border border-slate-100 overflow-hidden">
             <div className="p-5 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 <Eye className="w-5 h-5 text-blue-600" />

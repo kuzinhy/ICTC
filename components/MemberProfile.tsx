@@ -7,9 +7,15 @@ import {
 } from 'lucide-react';
 import { User, DesignFile, AIPrompt, Article } from '../types';
 import { UserAvatar, compressAndResizeImage } from './UserAvatar';
-import { saveUserToDb, deleteDesignFromDb, deletePromptFromDb, deleteArticleFromDb } from '../lib/db';
+import { 
+  saveUserToDb, deleteDesignFromDb, deletePromptFromDb, deleteArticleFromDb,
+  saveArticleToDb, saveDesignToDb, savePromptToDb 
+} from '../lib/db';
 import { useToast } from '../context/ToastContext';
 import { ArticleReaderModal } from './ArticleReaderModal';
+import { ArticleEditorModal } from './ArticleEditorModal';
+import { DesignEditorModal } from './DesignEditorModal';
+import { PromptEditorModal } from './PromptEditorModal';
 
 interface MemberProfileProps {
   currentUser: User;
@@ -161,6 +167,16 @@ export const MemberProfile: React.FC<MemberProfileProps> = ({
   const [bio, setBio] = useState(currentUser.bio || '');
   const [isSaving, setIsSaving] = useState(false);
   
+  // Editing state for modals
+  const [editingArticle, setEditingArticle] = useState<Article | null>(null);
+  const [isArticleEditorOpen, setIsArticleEditorOpen] = useState(false);
+
+  const [editingDesign, setEditingDesign] = useState<DesignFile | null>(null);
+  const [isDesignEditorOpen, setIsDesignEditorOpen] = useState(false);
+
+  const [editingPrompt, setEditingPrompt] = useState<AIPrompt | null>(null);
+  const [isPromptEditorOpen, setIsPromptEditorOpen] = useState(false);
+
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -172,6 +188,10 @@ export const MemberProfile: React.FC<MemberProfileProps> = ({
   }, [currentUser]);
 
   useEffect(() => {
+    const deletedIds = (() => {
+      try { return JSON.parse(localStorage.getItem('ictc_deleted_ids') || '[]'); } catch (e) { return []; }
+    })();
+
     // 1. Get user contributed designs
     const sourceFiles = designFiles && designFiles.length > 0 ? designFiles : (() => {
       const saved = localStorage.getItem('ictc_design_files');
@@ -181,11 +201,13 @@ export const MemberProfile: React.FC<MemberProfileProps> = ({
       return [];
     })();
 
-    const filteredFiles = sourceFiles.filter(f => 
-      f.authorId === currentUser.id || 
-      (f.author && f.author.toLowerCase().includes(currentUser.displayName.toLowerCase())) ||
-      (currentUser.role === 'Admin')
-    );
+    const filteredFiles = sourceFiles
+      .filter(f => !deletedIds.includes(f.id))
+      .filter(f => 
+        f.authorId === currentUser.id || 
+        (f.author && f.author.toLowerCase().includes(currentUser.displayName.toLowerCase())) ||
+        (currentUser.role === 'Admin')
+      );
     setUserFiles(filteredFiles);
 
     // 2. Get user contributed prompts
@@ -197,11 +219,13 @@ export const MemberProfile: React.FC<MemberProfileProps> = ({
       return [];
     })();
 
-    const filteredPrompts = sourcePrompts.filter(p => 
-      p.authorId === currentUser.id || 
-      (p.author && p.author.toLowerCase().includes(currentUser.displayName.toLowerCase())) ||
-      (currentUser.role === 'Admin')
-    );
+    const filteredPrompts = sourcePrompts
+      .filter(p => !deletedIds.includes(p.id))
+      .filter(p => 
+        p.authorId === currentUser.id || 
+        (p.author && p.author.toLowerCase().includes(currentUser.displayName.toLowerCase())) ||
+        (currentUser.role === 'Admin')
+      );
     setUserPrompts(filteredPrompts);
 
     // 3. Get user contributed articles
@@ -213,11 +237,13 @@ export const MemberProfile: React.FC<MemberProfileProps> = ({
       return [];
     })();
 
-    const filteredArticles = sourceArticles.filter(a => 
-      a.authorId === currentUser.id || 
-      (a.author && a.author.toLowerCase().includes(currentUser.displayName.toLowerCase())) ||
-      (currentUser.role === 'Admin')
-    );
+    const filteredArticles = sourceArticles
+      .filter(a => !deletedIds.includes(a.id))
+      .filter(a => 
+        a.authorId === currentUser.id || 
+        (a.author && a.author.toLowerCase().includes(currentUser.displayName.toLowerCase())) ||
+        (currentUser.role === 'Admin')
+      );
     setUserArticles(filteredArticles);
 
   }, [currentUser, designFiles, aiPrompts, articles]);
@@ -231,6 +257,18 @@ export const MemberProfile: React.FC<MemberProfileProps> = ({
     
     setContributionPoints(fileScore + promptScore + popularityScore + 100);
   }, [userFiles, userPrompts]);
+
+  // Record deleted ID permanently so it persists across refreshes and syncs
+  const recordDeletedId = (id: string) => {
+    try {
+      const saved = localStorage.getItem('ictc_deleted_ids');
+      const list = saved ? JSON.parse(saved) : [];
+      if (!list.includes(id)) {
+        list.push(id);
+        localStorage.setItem('ictc_deleted_ids', JSON.stringify(list));
+      }
+    } catch (e) {}
+  };
 
   // Handle avatar file upload
   const processAvatarFile = async (file: File) => {
@@ -351,17 +389,57 @@ export const MemberProfile: React.FC<MemberProfileProps> = ({
     }
   };
 
+  // Edit / Save Design File Handlers
+  const handleEditDesign = (file: DesignFile) => {
+    if (onEditDesign) {
+      onEditDesign(file);
+    }
+    setEditingDesign(file);
+    setIsDesignEditorOpen(true);
+  };
+
+  const handleSaveDesign = async (savedFile: DesignFile) => {
+    try {
+      await saveDesignToDb(savedFile);
+    } catch (e) {
+      console.warn('Lưu thiết kế vào Firestore có cảnh báo, cập nhật bộ nhớ cục bộ:', e);
+    }
+
+    const currentAllDesigns = (designFiles && designFiles.length > 0) ? designFiles : userFiles;
+    const exists = currentAllDesigns.some(f => f.id === savedFile.id);
+    const updatedAll = exists 
+      ? currentAllDesigns.map(f => f.id === savedFile.id ? savedFile : f)
+      : [savedFile, ...currentAllDesigns];
+
+    setUserFiles(prev => {
+      const e = prev.some(f => f.id === savedFile.id);
+      return e ? prev.map(f => f.id === savedFile.id ? savedFile : f) : [savedFile, ...prev];
+    });
+
+    localStorage.setItem('ictc_design_files', JSON.stringify(updatedAll));
+    if (onDesignUpdate) {
+      onDesignUpdate(updatedAll);
+    }
+
+    setIsDesignEditorOpen(false);
+    setEditingDesign(null);
+    toastSuccess('Đã cập nhật tài nguyên thiết kế thành công!', 'Hồ sơ cá nhân');
+  };
+
   const handleDeleteFile = async (fileId: string) => {
     if (window.confirm('Bạn có chắc chắn muốn xóa tệp / bài đóng góp thiết kế này? Hành động này không thể hoàn tác.')) {
+      recordDeletedId(fileId);
+
       try {
         await deleteDesignFromDb(fileId);
       } catch (e) {
         console.warn('Xóa từ Firestore có cảnh báo, tiếp tục xóa bộ nhớ cục bộ:', e);
       }
 
-      const source = designFiles || userFiles;
-      const updated = source.filter(f => f.id !== fileId);
       setUserFiles(prev => prev.filter(f => f.id !== fileId));
+
+      const source = (designFiles && designFiles.length > 0) ? designFiles : userFiles;
+      const updated = source.filter(f => f.id !== fileId);
       localStorage.setItem('ictc_design_files', JSON.stringify(updated));
 
       if (onDesignUpdate) {
@@ -373,17 +451,57 @@ export const MemberProfile: React.FC<MemberProfileProps> = ({
     }
   };
 
+  // Edit / Save Prompt Handlers
+  const handleEditPrompt = (prompt: AIPrompt) => {
+    if (onEditPrompt) {
+      onEditPrompt(prompt);
+    }
+    setEditingPrompt(prompt);
+    setIsPromptEditorOpen(true);
+  };
+
+  const handleSavePrompt = async (savedPrompt: AIPrompt) => {
+    try {
+      await savePromptToDb(savedPrompt);
+    } catch (e) {
+      console.warn('Lưu prompt vào Firestore có cảnh báo, cập nhật bộ nhớ cục bộ:', e);
+    }
+
+    const currentAllPrompts = (aiPrompts && aiPrompts.length > 0) ? aiPrompts : userPrompts;
+    const exists = currentAllPrompts.some(p => p.id === savedPrompt.id);
+    const updatedAll = exists 
+      ? currentAllPrompts.map(p => p.id === savedPrompt.id ? savedPrompt : p)
+      : [savedPrompt, ...currentAllPrompts];
+
+    setUserPrompts(prev => {
+      const e = prev.some(p => p.id === savedPrompt.id);
+      return e ? prev.map(p => p.id === savedPrompt.id ? savedPrompt : p) : [savedPrompt, ...prev];
+    });
+
+    localStorage.setItem('ictc_ai_prompts', JSON.stringify(updatedAll));
+    if (onPromptUpdate) {
+      onPromptUpdate(updatedAll);
+    }
+
+    setIsPromptEditorOpen(false);
+    setEditingPrompt(null);
+    toastSuccess('Đã cập nhật câu lệnh AI thành công!', 'Hồ sơ cá nhân');
+  };
+
   const handleDeletePrompt = async (promptId: string) => {
     if (window.confirm('Bạn có chắc chắn muốn xóa bài đóng góp câu lệnh AI này? Hành động này không thể hoàn tác.')) {
+      recordDeletedId(promptId);
+
       try {
         await deletePromptFromDb(promptId);
       } catch (e) {
         console.warn('Xóa từ Firestore có cảnh báo, tiếp tục xóa bộ nhớ cục bộ:', e);
       }
 
-      const source = aiPrompts || userPrompts;
-      const updated = source.filter(p => p.id !== promptId);
       setUserPrompts(prev => prev.filter(p => p.id !== promptId));
+
+      const source = (aiPrompts && aiPrompts.length > 0) ? aiPrompts : userPrompts;
+      const updated = source.filter(p => p.id !== promptId);
       localStorage.setItem('ictc_ai_prompts', JSON.stringify(updated));
 
       if (onPromptUpdate) {
@@ -395,17 +513,57 @@ export const MemberProfile: React.FC<MemberProfileProps> = ({
     }
   };
 
+  // Edit / Save Article Handlers
+  const handleEditArticle = (article: Article) => {
+    if (onEditArticle) {
+      onEditArticle(article);
+    }
+    setEditingArticle(article);
+    setIsArticleEditorOpen(true);
+  };
+
+  const handleSaveArticle = async (savedArticle: Article) => {
+    try {
+      await saveArticleToDb(savedArticle);
+    } catch (e) {
+      console.warn('Lưu bài viết vào Firestore có cảnh báo, cập nhật bộ nhớ cục bộ:', e);
+    }
+
+    const currentAllArticles = (articles && articles.length > 0) ? articles : userArticles;
+    const exists = currentAllArticles.some(a => a.id === savedArticle.id);
+    const updatedAll = exists 
+      ? currentAllArticles.map(a => a.id === savedArticle.id ? savedArticle : a)
+      : [savedArticle, ...currentAllArticles];
+
+    setUserArticles(prev => {
+      const e = prev.some(a => a.id === savedArticle.id);
+      return e ? prev.map(a => a.id === savedArticle.id ? savedArticle : a) : [savedArticle, ...prev];
+    });
+
+    localStorage.setItem('ictc_articles', JSON.stringify(updatedAll));
+    if (onArticleUpdate) {
+      onArticleUpdate(updatedAll);
+    }
+
+    setIsArticleEditorOpen(false);
+    setEditingArticle(null);
+    toastSuccess('Đã cập nhật bài viết thành công!', 'Hồ sơ cá nhân');
+  };
+
   const handleDeleteArticle = async (articleId: string) => {
     if (window.confirm('Bạn có chắc chắn muốn xóa bài viết này? Hành động này không thể hoàn tác.')) {
+      recordDeletedId(articleId);
+
       try {
         await deleteArticleFromDb(articleId);
       } catch (e) {
         console.warn('Xóa từ Firestore có cảnh báo, tiếp tục xóa bộ nhớ cục bộ:', e);
       }
 
-      const source = articles || userArticles;
-      const updated = source.filter(a => a.id !== articleId);
       setUserArticles(prev => prev.filter(a => a.id !== articleId));
+
+      const source = (articles && articles.length > 0) ? articles : userArticles;
+      const updated = source.filter(a => a.id !== articleId);
       localStorage.setItem('ictc_articles', JSON.stringify(updated));
 
       if (onArticleUpdate) {
@@ -929,15 +1087,13 @@ export const MemberProfile: React.FC<MemberProfileProps> = ({
                       <p className="text-[9px] text-slate-400 font-medium">Đăng vào: {file.createdAt}</p>
                     </div>
                     <div className="flex items-center space-x-1 shrink-0">
-                      {onEditDesign && (
-                        <button
-                          onClick={() => onEditDesign(file)}
-                          className="p-1.5 bg-white hover:bg-blue-50 text-slate-400 hover:text-blue-600 rounded-lg border border-slate-200 transition-colors"
-                          title="Sửa bài đăng"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                      )}
+                      <button
+                        onClick={() => handleEditDesign(file)}
+                        className="p-1.5 bg-white hover:bg-blue-50 text-slate-400 hover:text-blue-600 rounded-lg border border-slate-200 transition-colors"
+                        title="Sửa bài đăng"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
                       <button
                         onClick={() => handleDeleteFile(file.id)}
                         className="p-1.5 bg-white hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-lg border border-slate-200 transition-colors"
@@ -982,15 +1138,13 @@ export const MemberProfile: React.FC<MemberProfileProps> = ({
                       <p className="text-[9px] text-slate-400 font-medium">Đăng vào: {prompt.createdAt}</p>
                     </div>
                     <div className="flex items-center space-x-1 shrink-0">
-                      {onEditPrompt && (
-                        <button
-                          onClick={() => onEditPrompt(prompt)}
-                          className="p-1.5 bg-white hover:bg-purple-50 text-slate-400 hover:text-purple-600 rounded-lg border border-slate-200 transition-colors"
-                          title="Sửa câu lệnh"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                      )}
+                      <button
+                        onClick={() => handleEditPrompt(prompt)}
+                        className="p-1.5 bg-white hover:bg-purple-50 text-slate-400 hover:text-purple-600 rounded-lg border border-slate-200 transition-colors"
+                        title="Sửa câu lệnh"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
                       <button
                         onClick={() => handleDeletePrompt(prompt.id)}
                         className="p-1.5 bg-white hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-lg border border-slate-200 transition-colors"
@@ -1035,15 +1189,13 @@ export const MemberProfile: React.FC<MemberProfileProps> = ({
                       <p className="text-[9px] text-slate-400 font-medium">Ngày đăng: {article.publishedAt}</p>
                     </div>
                     <div className="flex items-center space-x-1 shrink-0">
-                      {onEditArticle && (
-                        <button
-                          onClick={() => onEditArticle(article)}
-                          className="p-1.5 bg-white hover:bg-emerald-50 text-slate-400 hover:text-emerald-600 rounded-lg border border-slate-200 transition-colors"
-                          title="Sửa bài viết"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                      )}
+                      <button
+                        onClick={() => handleEditArticle(article)}
+                        className="p-1.5 bg-white hover:bg-emerald-50 text-slate-400 hover:text-emerald-600 rounded-lg border border-slate-200 transition-colors"
+                        title="Sửa bài viết"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
                       <button
                         onClick={() => handleDeleteArticle(article.id)}
                         className="p-1.5 bg-white hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-lg border border-slate-200 transition-colors"
@@ -1067,6 +1219,49 @@ export const MemberProfile: React.FC<MemberProfileProps> = ({
           article={readingArticle}
           currentUser={currentUser}
           onClose={() => setReadingArticle(null)}
+        />
+      )}
+
+      {/* Article Editor Modal */}
+      {isArticleEditorOpen && (
+        <ArticleEditorModal
+          isOpen={isArticleEditorOpen}
+          onClose={() => {
+            setIsArticleEditorOpen(false);
+            setEditingArticle(null);
+          }}
+          articleToEdit={editingArticle}
+          designFiles={designFiles || []}
+          onSaveSuccess={handleSaveArticle}
+          currentAuthorName={currentUser.displayName}
+        />
+      )}
+
+      {/* Design Editor Modal */}
+      {isDesignEditorOpen && (
+        <DesignEditorModal
+          isOpen={isDesignEditorOpen}
+          onClose={() => {
+            setIsDesignEditorOpen(false);
+            setEditingDesign(null);
+          }}
+          editingFile={editingDesign}
+          currentUser={currentUser}
+          onSave={handleSaveDesign}
+        />
+      )}
+
+      {/* Prompt Editor Modal */}
+      {isPromptEditorOpen && (
+        <PromptEditorModal
+          isOpen={isPromptEditorOpen}
+          onClose={() => {
+            setIsPromptEditorOpen(false);
+            setEditingPrompt(null);
+          }}
+          editingPrompt={editingPrompt}
+          currentUser={currentUser}
+          onSave={handleSavePrompt}
         />
       )}
     </div>

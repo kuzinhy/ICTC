@@ -8,6 +8,7 @@ import { scanContentSafety } from '../lib/contentModeration';
 import { optimizePrompt } from '../lib/gemini';
 import { uploadFileToGoogleDrive, getActiveAppsScriptUrl } from '../lib/appsScriptUploader';
 import { DRIVE_PROMPT_FOLDER } from '../data/constants';
+import { normalizeImageUrl, getProxyImageUrl } from '../lib/imageUtils';
 
 interface PromptEditorModalProps {
   isOpen: boolean;
@@ -198,8 +199,8 @@ export const PromptEditorModal: React.FC<PromptEditorModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-fade-in">
-      <div className="bg-white border border-slate-100 rounded-3xl w-full max-w-xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto bg-slate-950/70 backdrop-blur-md animate-fade-in">
+      <div className="bg-white border border-slate-100 rounded-3xl w-full max-w-xl my-auto overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
         {/* Header */}
         <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50">
           <div className="flex items-center space-x-2">
@@ -319,26 +320,71 @@ export const PromptEditorModal: React.FC<PromptEditorModalProps> = ({
 
             {/* Preview Image URL */}
             <div className="sm:col-span-2 space-y-1">
-              <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Ảnh minh họa kết quả vẽ AI (Preview Image URL)</label>
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Ảnh minh họa kết quả vẽ AI (Preview Image URL)</label>
+                {previewImageUrl && (
+                  <button
+                    type="button"
+                    onClick={() => setPreviewImageUrl(normalizeImageUrl(previewImageUrl))}
+                    className="text-[10px] text-purple-600 hover:text-purple-800 font-bold underline"
+                  >
+                    Tự động tối ưu link
+                  </button>
+                )}
+              </div>
               <input
                 type="url"
                 required
                 value={previewImageUrl}
-                onChange={(e) => setPreviewImageUrl(e.target.value)}
-                placeholder="https://images.unsplash.com/photo-..."
+                onChange={(e) => setPreviewImageUrl(normalizeImageUrl(e.target.value))}
+                placeholder="https://images.unsplash.com/photo-... hoặc https://sv2.anhsieuviet.com/..."
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-purple-500 focus:bg-white"
               />
               {previewImageUrl && (
-                <div className="pt-2">
-                  <p className="text-[10px] text-slate-400 font-bold mb-1">Kết quả trực quan xem trước:</p>
-                  <img
-                    src={previewImageUrl}
-                    alt="AI render output preview"
-                    className="w-full h-32 rounded-xl object-cover border border-slate-200 shadow-2xs"
-                    onError={(e) => {
-                      (e.target as any).src = 'https://images.unsplash.com/photo-1541872703-74c5e44368f9?auto=format&fit=crop&w=1200&q=80';
-                    }}
-                  />
+                <div className="pt-2 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[10px] text-slate-500 font-bold flex items-center space-x-1">
+                      <ImageIcon className="w-3 h-3 text-purple-600" />
+                      <span>Kết quả trực quan xem trước:</span>
+                    </p>
+                    <a
+                      href={previewImageUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[10px] text-slate-400 hover:text-purple-600 font-medium flex items-center space-x-0.5"
+                    >
+                      <span>Mở link gốc</span>
+                      <ExternalLink className="w-2.5 h-2.5" />
+                    </a>
+                  </div>
+                  <div className="relative group rounded-2xl overflow-hidden border border-slate-200 bg-slate-900/5 min-h-[120px] flex items-center justify-center shadow-2xs">
+                    <img
+                      src={previewImageUrl}
+                      alt="AI render output preview"
+                      className="w-full h-36 rounded-2xl object-cover"
+                      referrerPolicy="no-referrer"
+                      loading="eager"
+                      onError={(e) => {
+                        const img = e.currentTarget;
+                        const proxy = getProxyImageUrl(previewImageUrl);
+                        if (img.src !== proxy && !previewImageUrl.includes('images.weserv.nl')) {
+                          img.src = proxy;
+                        }
+                      }}
+                    />
+                    <div className="absolute inset-0 bg-slate-900/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center p-3 gap-2">
+                      <span className="text-white text-xs font-bold px-3 py-1 bg-slate-900/80 rounded-lg backdrop-blur-md">
+                        Ảnh xem trước hợp lệ (No-Referrer Bypassed)
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setPreviewImageUrl(getProxyImageUrl(previewImageUrl))}
+                        className="text-[10px] font-bold text-amber-300 bg-amber-950/80 hover:bg-amber-900 px-2.5 py-1 rounded-lg border border-amber-500/40 transition-colors"
+                      >
+                        ⚡ Chuyển qua máy chủ đệm Web Proxy nếu bị chặn
+                      </button>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>

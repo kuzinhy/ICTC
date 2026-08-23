@@ -29,22 +29,25 @@ interface PromptHubProps {
 
 const QUICK_TAGS = [
   'Tất cả',
+  'Sen Cam',
+  'Phông Nền',
+  'Bục Sản Phẩm',
   'Đại hội Đảng',
   'Trống đồng',
   'Chuyển đổi số',
   'Thanh niên Đoàn',
   'Quốc khánh 2/9',
   '20/11',
-  '27/2',
   'Hoa sen',
-  'An toàn giao thông',
-  'Biển đảo',
+  'Gala Dinner',
+  'Studio Livestream',
   'OCOP',
-  'Giấy khen',
   'Kỷ yếu'
 ];
 
 const SAMPLE_PREVIEW_IMAGES = [
+  { label: 'Sen Cam: Phông Hoa Sen Vàng Kim & Trống Đồng', url: 'https://images.unsplash.com/photo-1541872703-74c5e44368f9?auto=format&fit=crop&w=1200&q=80' },
+  { label: 'Sen Cam: Bục Đá Cẩm Thạch & Lá Nhiệt Đới', url: 'https://images.unsplash.com/photo-1507652313519-d4e9174996dd?auto=format&fit=crop&w=1200&q=80' },
   { label: 'Phông Đại hội / Hội nghị Đỏ - Vàng', url: 'https://images.unsplash.com/photo-1541872703-74c5e44368f9?auto=format&fit=crop&w=1200&q=80' },
   { label: 'Phông Đoàn Thanh niên / Hội nghị Xanh', url: 'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&w=1200&q=80' },
   { label: 'Hội nghị Cơ quan / Hội trường Đẳng cấp', url: 'https://images.unsplash.com/photo-1505373877841-8d25f7d46678?auto=format&fit=crop&w=1200&q=80' },
@@ -1034,6 +1037,13 @@ export const PromptHub: React.FC<PromptHubProps> = ({ currentUser, prompts, onPr
                               alt={prompt.title}
                               className="w-full h-full object-cover group-hover/img:scale-105 transition-transform duration-500"
                               loading="lazy"
+                              referrerPolicy="no-referrer"
+                              onError={(e) => {
+                                const target = e.currentTarget;
+                                if (!target.src.includes('images.weserv.nl') && imageUrl.startsWith('http')) {
+                                  target.src = `https://images.weserv.nl/?url=${encodeURIComponent(imageUrl.replace(/^https?:\/\//, ''))}`;
+                                }
+                              }}
                             />
                             
                             <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/20 opacity-0 group-hover/img:opacity-100 transition-opacity duration-300 flex items-end justify-between p-4 text-white">
@@ -1107,6 +1117,13 @@ export const PromptHub: React.FC<PromptHubProps> = ({ currentUser, prompts, onPr
                         alt={prompt.title}
                         className="w-full h-full object-cover group-hover/card:scale-105 transition-transform duration-500"
                         loading="lazy"
+                        referrerPolicy="no-referrer"
+                        onError={(e) => {
+                          const target = e.currentTarget;
+                          if (!target.src.includes('images.weserv.nl') && imageUrl.startsWith('http')) {
+                            target.src = `https://images.weserv.nl/?url=${encodeURIComponent(imageUrl.replace(/^https?:\/\//, ''))}`;
+                          }
+                        }}
                       />
                       <div className="absolute top-3 left-3 flex gap-1.5 flex-wrap">
                         <span className="px-2 py-1 bg-red-600 text-white text-[9px] font-black rounded-lg uppercase shadow-sm">
@@ -1236,8 +1253,8 @@ export const PromptHub: React.FC<PromptHubProps> = ({ currentUser, prompts, onPr
 
       {/* LIGHTBOX MODAL: XEM PHÓNG TO ẢNH & PROMPT SONG SONG */}
       {lightboxPrompt && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-950/80 backdrop-blur-md animate-fade-in">
-          <div className="bg-white border border-slate-100 rounded-3xl w-full max-w-5xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto bg-slate-950/80 backdrop-blur-md animate-fade-in">
+          <div className="bg-white border border-slate-100 rounded-3xl w-full max-w-5xl my-auto overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
             {/* Lightbox Header */}
             <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between border-b border-slate-800">
               <div className="flex items-center space-x-3">
@@ -1264,6 +1281,7 @@ export const PromptHub: React.FC<PromptHubProps> = ({ currentUser, prompts, onPr
                   src={lightboxPrompt.previewImageUrl || (lightboxPrompt as any).previewUrl}
                   alt={lightboxPrompt.title}
                   className="max-h-[60vh] w-auto object-contain rounded-xl shadow-2xl"
+                  referrerPolicy="no-referrer"
                 />
                 <a
                   href={lightboxPrompt.previewImageUrl || (lightboxPrompt as any).previewUrl}
@@ -1339,8 +1357,8 @@ export const PromptHub: React.FC<PromptHubProps> = ({ currentUser, prompts, onPr
 
       {/* Upload/Contribution Form Modal */}
       {isSubmitOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-md animate-fade-in">
-          <div className="bg-white border border-slate-100 rounded-3xl w-full max-w-xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto bg-slate-950/70 backdrop-blur-md animate-fade-in">
+          <div className="bg-white border border-slate-100 rounded-3xl w-full max-w-xl my-auto overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
             <div className="px-6 py-5 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 <Sparkles className="w-5 h-5 text-red-600" />

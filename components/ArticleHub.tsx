@@ -3,7 +3,8 @@ import {
   Search, BookOpen, Clock, Eye, Heart, Share2, Plus, 
   Sparkles, Filter, Bookmark, BookmarkCheck, ArrowRight, 
   Check, Calendar, User as UserIcon, X, Tag, Edit3, Flame, Pin,
-  MessageSquare, MessageCircle, Link2, Download, Layers
+  MessageSquare, MessageCircle, Link2, Download, Layers,
+  ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Trash2
 } from 'lucide-react';
 import { Article, User as UserType, DesignFile } from '../types';
 import { INITIAL_ARTICLES } from '../data/mockData';
@@ -184,6 +185,20 @@ export const ArticleHub: React.FC<ArticleHubProps> = ({
     setIsEditorOpen(false);
   };
 
+  const handleDeleteArticle = async (articleId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (window.confirm('Bạn có chắc chắn muốn xóa bài viết này không?')) {
+      const updated = articles.filter(a => a.id !== articleId);
+      onArticlesUpdate(updated);
+      try {
+        await deleteArticleFromDb(articleId);
+      } catch (err) {
+        console.warn('Could not delete article from Firestore:', err);
+      }
+      toastInfo('Đã xóa bài viết khỏi hệ thống.', 'Đã xóa bài viết');
+    }
+  };
+
   // Filtering
   const filteredArticles = useMemo(() => {
     return (articles || []).filter(art => {
@@ -217,10 +232,33 @@ export const ArticleHub: React.FC<ArticleHubProps> = ({
     });
   }, [articles, searchTerm, selectedCategory, selectedSpecialty, currentUser]);
 
+  // Pagination & Load More States
+  const [displayMode, setDisplayMode] = useState<'loadMore' | 'pagination'>('loadMore');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(6);
+  const [visibleCount, setVisibleCount] = useState(6);
+
+  // Reset pagination state when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+    setVisibleCount(itemsPerPage);
+  }, [searchTerm, selectedCategory, selectedSpecialty, itemsPerPage]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredArticles.length / itemsPerPage));
+
+  const displayedArticles = useMemo(() => {
+    if (displayMode === 'loadMore') {
+      return filteredArticles.slice(0, visibleCount);
+    } else {
+      const start = (currentPage - 1) * itemsPerPage;
+      return filteredArticles.slice(start, start + itemsPerPage);
+    }
+  }, [filteredArticles, displayMode, visibleCount, currentPage, itemsPerPage]);
+
   const featuredArticle = articles.find(a => a.isPinned && a.status === 'Published') || articles.find(a => a.status === 'Published') || articles[0];
 
   return (
-    <div className="space-y-10 animate-fade-in pb-12">
+    <div className="space-y-10 animate-fade-in pb-12" id="article-hub-root">
       
       {/* Header & Write Article Action */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-gradient-to-r from-blue-900/10 via-indigo-900/5 to-purple-900/10 p-6 sm:p-8 rounded-3xl border border-blue-100">
@@ -400,7 +438,7 @@ export const ArticleHub: React.FC<ArticleHubProps> = ({
 
       {/* Articles Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredArticles.map((art) => {
+        {displayedArticles.map((art) => {
           const isSaved = bookmarkedIds.includes(art.id);
           const isLiked = likedArticleIds.includes(art.id);
           const isToastShared = sharedToastId === art.id;
@@ -453,20 +491,29 @@ export const ArticleHub: React.FC<ArticleHubProps> = ({
                   )}
                 </div>
 
-                {/* Top Actions: Edit & Bookmark */}
-                <div className="absolute top-3 right-3 flex items-center space-x-2 z-10">
+                {/* Top Actions: Edit, Delete & Bookmark */}
+                <div className="absolute top-3 right-3 flex items-center space-x-1.5 z-10">
                   {canEdit && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setEditingArticle(art);
-                        setIsEditorOpen(true);
-                      }}
-                      className="p-2 rounded-xl bg-blue-600 text-white hover:bg-blue-700 shadow-md transition-all"
-                      title="Sửa bài viết trực tiếp"
-                    >
-                      <Edit3 className="w-3.5 h-3.5" />
-                    </button>
+                    <>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingArticle(art);
+                          setIsEditorOpen(true);
+                        }}
+                        className="p-2 rounded-xl bg-blue-600 text-white hover:bg-blue-700 shadow-md transition-all cursor-pointer"
+                        title="Sửa bài viết trực tiếp"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={(e) => handleDeleteArticle(art.id, e)}
+                        className="p-2 rounded-xl bg-rose-600 text-white hover:bg-rose-700 shadow-md transition-all cursor-pointer"
+                        title="Xóa bài viết"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </>
                   )}
 
                   <button
@@ -570,6 +617,165 @@ export const ArticleHub: React.FC<ArticleHubProps> = ({
           );
         })}
       </div>
+
+      {/* Pagination & Load More Control Bar */}
+      {filteredArticles.length > 0 && (
+        <div className="bg-white rounded-3xl border border-slate-200/80 p-5 sm:p-6 shadow-xs space-y-4">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            
+            {/* Info & Progress */}
+            <div className="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-4 w-full sm:w-auto text-center sm:text-left">
+              <div className="text-xs font-bold text-slate-600 flex items-center space-x-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-blue-600 animate-pulse shrink-0"></span>
+                <span>
+                  Hiển thị <strong className="text-slate-900 font-extrabold">{displayedArticles.length}</strong> / <strong className="text-slate-900 font-extrabold">{filteredArticles.length}</strong> bài viết
+                </span>
+              </div>
+
+              {/* Progress bar in loadMore mode */}
+              {displayMode === 'loadMore' && (
+                <div className="w-32 bg-slate-100 rounded-full h-2 overflow-hidden border border-slate-200/60 hidden md:block">
+                  <div 
+                    className="bg-gradient-to-r from-blue-600 to-indigo-600 h-full rounded-full transition-all duration-300"
+                    style={{ width: `${Math.min(100, Math.round((displayedArticles.length / filteredArticles.length) * 100))}%` }}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Display Mode & Items Per Page Selector */}
+            <div className="flex items-center space-x-3 text-xs w-full sm:w-auto justify-between sm:justify-end">
+              <div className="flex items-center space-x-1 bg-slate-100 p-1 rounded-2xl border border-slate-200/80">
+                <button
+                  onClick={() => setDisplayMode('loadMore')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    displayMode === 'loadMore'
+                      ? 'bg-white text-blue-600 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Tải thêm
+                </button>
+                <button
+                  onClick={() => setDisplayMode('pagination')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    displayMode === 'pagination'
+                      ? 'bg-white text-blue-600 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Phân trang
+                </button>
+              </div>
+
+              <div className="flex items-center space-x-1.5 bg-slate-50 px-3 py-1.5 rounded-2xl border border-slate-200 text-slate-600">
+                <span className="font-semibold text-[11px] hidden xs:inline">Hiển thị:</span>
+                <select
+                  value={itemsPerPage}
+                  onChange={(e) => setItemsPerPage(Number(e.target.value))}
+                  className="bg-transparent font-bold text-slate-800 focus:outline-none cursor-pointer text-xs"
+                >
+                  <option value={6}>6 bài/trang</option>
+                  <option value={9}>9 bài/trang</option>
+                  <option value={12}>12 bài/trang</option>
+                  <option value={18}>18 bài/trang</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Load More Mode Actions */}
+          {displayMode === 'loadMore' && (
+            <div className="flex flex-wrap items-center justify-center gap-3 pt-3 border-t border-slate-100">
+              {visibleCount < filteredArticles.length ? (
+                <button
+                  onClick={() => setVisibleCount(prev => Math.min(filteredArticles.length, prev + itemsPerPage))}
+                  className="px-6 py-3 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-2xl text-xs font-bold shadow-lg shadow-blue-500/20 transition-all flex items-center space-x-2 cursor-pointer"
+                >
+                  <ChevronDown className="w-4 h-4" />
+                  <span>Tải thêm {Math.min(itemsPerPage, filteredArticles.length - visibleCount)} bài viết tiếp theo</span>
+                </button>
+              ) : (
+                <div className="text-slate-500 text-xs font-semibold flex items-center space-x-1.5 py-1">
+                  <Check className="w-4 h-4 text-emerald-500" />
+                  <span>Đã tải toàn bộ {filteredArticles.length} bài viết phù hợp!</span>
+                </div>
+              )}
+
+              {visibleCount > itemsPerPage && (
+                <button
+                  onClick={() => {
+                    setVisibleCount(itemsPerPage);
+                    document.getElementById('article-hub-root')?.scrollIntoView({ behavior: 'smooth' });
+                  }}
+                  className="px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl text-xs font-bold transition-all flex items-center space-x-1 cursor-pointer"
+                >
+                  <ChevronUp className="w-4 h-4" />
+                  <span>Thu gọn</span>
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Pagination Mode Actions */}
+          {displayMode === 'pagination' && totalPages > 1 && (
+            <div className="flex flex-wrap items-center justify-center gap-2 pt-3 border-t border-slate-100">
+              <button
+                onClick={() => {
+                  setCurrentPage(prev => Math.max(1, prev - 1));
+                  document.getElementById('article-hub-root')?.scrollIntoView({ behavior: 'smooth' });
+                }}
+                disabled={currentPage === 1}
+                className="px-3.5 py-2 rounded-xl text-xs font-bold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center space-x-1 cursor-pointer"
+              >
+                <ChevronLeft className="w-4 h-4" />
+                <span className="hidden sm:inline">Trang trước</span>
+              </button>
+
+              <div className="flex items-center space-x-1">
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                  .filter(p => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
+                  .map((page, idx, arr) => {
+                    const prevPage = arr[idx - 1];
+                    const showEllipsis = prevPage && page - prevPage > 1;
+
+                    return (
+                      <React.Fragment key={page}>
+                        {showEllipsis && <span className="px-1.5 text-slate-400 text-xs">...</span>}
+                        <button
+                          onClick={() => {
+                            setCurrentPage(page);
+                            document.getElementById('article-hub-root')?.scrollIntoView({ behavior: 'smooth' });
+                          }}
+                          className={`w-8 h-8 rounded-xl text-xs font-bold transition-all flex items-center justify-center cursor-pointer ${
+                            currentPage === page
+                              ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
+                              : 'bg-white hover:bg-slate-100 text-slate-700 border border-slate-200'
+                          }`}
+                        >
+                          {page}
+                        </button>
+                      </React.Fragment>
+                    );
+                  })}
+              </div>
+
+              <button
+                onClick={() => {
+                  setCurrentPage(prev => Math.min(totalPages, prev + 1));
+                  document.getElementById('article-hub-root')?.scrollIntoView({ behavior: 'smooth' });
+                }}
+                disabled={currentPage === totalPages}
+                className="px-3.5 py-2 rounded-xl text-xs font-bold border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all flex items-center space-x-1 cursor-pointer"
+              >
+                <span className="hidden sm:inline">Trang tiếp</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
+        </div>
+      )}
 
       {filteredArticles.length === 0 && (
         <div className="text-center py-16 bg-white rounded-3xl border border-slate-200 p-8 space-y-3">
